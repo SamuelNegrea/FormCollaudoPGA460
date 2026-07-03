@@ -25,7 +25,6 @@ namespace FormCollaudoPGA460
         private byte[] virtualRegs = new byte[256];
         private bool offlineMode = false;
         private DataGridView dgvFields;
-        int var = 0;
         private readonly object serialLock = new object();
         private volatile bool refreshGraph = true;
         private List<PointF> cachedThresholdPts = null;
@@ -354,7 +353,6 @@ namespace FormCollaudoPGA460
             WriteRegister(0x28, (byte)(((fields.TEMP_GAIN & 0x0F) << 4) | (fields.TEMP_OFF & 0x0F)));
             WriteRegister(0x29, (byte)(((fields.P1_DIG_GAIN_LR_ST & 0x03) << 6) | ((fields.P1_DIG_GAIN_LR & 0x07) << 3) | (fields.P1_DIG_GAIN_SR & 0x07)));
             WriteRegister(0x2A, (byte)(((fields.P2_DIG_GAIN_LR_ST & 0x03) << 6) | ((fields.P2_DIG_GAIN_LR & 0x07) << 3) | (fields.P2_DIG_GAIN_SR & 0x07)));
-            //WriteRegister(0x2B, fields.EE_CRC);
         }
 
         private void DecodeEepromControl()
@@ -555,7 +553,6 @@ namespace FormCollaudoPGA460
             btnScanGrafico.Click += btnScanGrafico_Click;
 
             scanTimer.Interval = 1000;
-            //scanTimer.Tick += ScanTimer_Tick;
 
             btnReadConfig.Click += btnReadConfig_Click;
             btnWriteConfig.Click += btnWriteConfig_Click;
@@ -599,7 +596,6 @@ namespace FormCollaudoPGA460
         private void burst_interval_Elapsed(object sender, ElapsedEventArgs e)
 
         {
-            //System.Diagnostics.Debug.WriteLine(var++);
             SendBurst();
 
             //burst_to_dump.Enabled = true;         // avvia il timer
