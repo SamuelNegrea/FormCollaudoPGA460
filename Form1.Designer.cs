@@ -39,12 +39,6 @@
             btnConnect = new System.Windows.Forms.Button();
             btnReadAll = new System.Windows.Forms.Button();
             btnReadEEPROM = new System.Windows.Forms.Button();
-            Scan = new System.Windows.Forms.GroupBox();
-            labelTR = new System.Windows.Forms.Label();
-            labelTL = new System.Windows.Forms.Label();
-            btnScan = new System.Windows.Forms.Button();
-            txtTR = new System.Windows.Forms.TextBox();
-            txtTL = new System.Windows.Forms.TextBox();
             dgvRegisters = new System.Windows.Forms.DataGridView();
             txtDistance = new System.Windows.Forms.TextBox();
             txtWidth = new System.Windows.Forms.TextBox();
@@ -67,7 +61,8 @@
             label2 = new System.Windows.Forms.Label();
             label3 = new System.Windows.Forms.Label();
             label4 = new System.Windows.Forms.Label();
-            Scan.SuspendLayout();
+            btnScanMisure = new System.Windows.Forms.Button();
+            btnScanGrafico = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)dgvRegisters).BeginInit();
             ((System.ComponentModel.ISupportInitialize)pictureBoxDump).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numBurstInterval).BeginInit();
@@ -164,61 +159,6 @@
             btnReadEEPROM.TabIndex = 9;
             btnReadEEPROM.Text = "scrivi EEPROM";
             btnReadEEPROM.UseVisualStyleBackColor = true;
-            // 
-            // Scan
-            // 
-            Scan.Controls.Add(labelTR);
-            Scan.Controls.Add(labelTL);
-            Scan.Controls.Add(btnScan);
-            Scan.Controls.Add(txtTR);
-            Scan.Controls.Add(txtTL);
-            Scan.Location = new System.Drawing.Point(60, 305);
-            Scan.Name = "Scan";
-            Scan.Size = new System.Drawing.Size(219, 124);
-            Scan.TabIndex = 10;
-            Scan.TabStop = false;
-            Scan.Text = "groupBox1";
-            // 
-            // labelTR
-            // 
-            labelTR.AutoSize = true;
-            labelTR.Location = new System.Drawing.Point(10, 57);
-            labelTR.Name = "labelTR";
-            labelTR.Size = new System.Drawing.Size(48, 15);
-            labelTR.TabIndex = 4;
-            labelTR.Text = "TR (ms)";
-            // 
-            // labelTL
-            // 
-            labelTL.AutoSize = true;
-            labelTL.Location = new System.Drawing.Point(11, 28);
-            labelTL.Name = "labelTL";
-            labelTL.Size = new System.Drawing.Size(47, 15);
-            labelTL.TabIndex = 3;
-            labelTL.Text = "TL (ms)";
-            // 
-            // btnScan
-            // 
-            btnScan.Location = new System.Drawing.Point(70, 94);
-            btnScan.Name = "btnScan";
-            btnScan.Size = new System.Drawing.Size(75, 23);
-            btnScan.TabIndex = 2;
-            btnScan.Text = "Attiva Scan";
-            btnScan.UseVisualStyleBackColor = true;
-            // 
-            // txtTR
-            // 
-            txtTR.Location = new System.Drawing.Point(60, 54);
-            txtTR.Name = "txtTR";
-            txtTR.Size = new System.Drawing.Size(100, 23);
-            txtTR.TabIndex = 1;
-            // 
-            // txtTL
-            // 
-            txtTL.Location = new System.Drawing.Point(60, 25);
-            txtTL.Name = "txtTL";
-            txtTL.Size = new System.Drawing.Size(100, 23);
-            txtTL.TabIndex = 0;
             // 
             // dgvRegisters
             // 
@@ -341,7 +281,7 @@
             // 
             // numBurstInterval
             // 
-            numBurstInterval.Location = new System.Drawing.Point(312, 375);
+            numBurstInterval.Location = new System.Drawing.Point(42, 362);
             numBurstInterval.Name = "numBurstInterval";
             numBurstInterval.Size = new System.Drawing.Size(120, 23);
             numBurstInterval.TabIndex = 25;
@@ -397,15 +337,35 @@
             // label4
             // 
             label4.AutoSize = true;
-            label4.Location = new System.Drawing.Point(319, 347);
+            label4.Location = new System.Drawing.Point(46, 335);
             label4.Name = "label4";
-            label4.Size = new System.Drawing.Size(103, 15);
+            label4.Size = new System.Drawing.Size(116, 15);
             label4.TabIndex = 32;
-            label4.Text = "Velocità scansione";
+            label4.Text = "Frequenza scansione";
+            // 
+            // btnScanMisure
+            // 
+            btnScanMisure.Location = new System.Drawing.Point(29, 403);
+            btnScanMisure.Name = "btnScanMisure";
+            btnScanMisure.Size = new System.Drawing.Size(133, 23);
+            btnScanMisure.TabIndex = 2;
+            btnScanMisure.Text = "Attiva Scan Misure";
+            btnScanMisure.UseVisualStyleBackColor = true;
+            // 
+            // btnScanGrafico
+            // 
+            btnScanGrafico.Location = new System.Drawing.Point(356, 403);
+            btnScanGrafico.Name = "btnScanGrafico";
+            btnScanGrafico.Size = new System.Drawing.Size(120, 23);
+            btnScanGrafico.TabIndex = 33;
+            btnScanGrafico.Text = "Attiva Scan Grafico";
+            btnScanGrafico.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 
             ClientSize = new System.Drawing.Size(1384, 861);
+            Controls.Add(btnScanGrafico);
+            Controls.Add(btnScanMisure);
             Controls.Add(label4);
             Controls.Add(label3);
             Controls.Add(label2);
@@ -428,7 +388,6 @@
             Controls.Add(txtWidth);
             Controls.Add(txtDistance);
             Controls.Add(dgvRegisters);
-            Controls.Add(Scan);
             Controls.Add(btnReadEEPROM);
             Controls.Add(btnReadAll);
             Controls.Add(btnConnect);
@@ -441,8 +400,6 @@
             Controls.Add(txtIndirizzo);
             Name = "Form1";
             Text = "PGA460 Tool";
-            Scan.ResumeLayout(false);
-            Scan.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dgvRegisters).EndInit();
             ((System.ComponentModel.ISupportInitialize)pictureBoxDump).EndInit();
             ((System.ComponentModel.ISupportInitialize)numBurstInterval).EndInit();
@@ -504,26 +461,6 @@
         private System.Windows.Forms.Button btnReadEEPROM;
 
         /// <summary>
-        /// Defines the Scan
-        /// </summary>
-        private System.Windows.Forms.GroupBox Scan;
-
-        /// <summary>
-        /// Defines the txtTR
-        /// </summary>
-        private System.Windows.Forms.TextBox txtTR;
-
-        /// <summary>
-        /// Defines the txtTL
-        /// </summary>
-        private System.Windows.Forms.TextBox txtTL;
-
-        /// <summary>
-        /// Defines the btnScan
-        /// </summary>
-        private System.Windows.Forms.Button btnScan;
-
-        /// <summary>
         /// Defines the dgvRegisters
         /// </summary>
         private System.Windows.Forms.DataGridView dgvRegisters;
@@ -547,16 +484,6 @@
         /// Defines the panelTrigger
         /// </summary>
         private System.Windows.Forms.Panel panelTrigger;
-
-        /// <summary>
-        /// Defines the labelTL
-        /// </summary>
-        private System.Windows.Forms.Label labelTL;
-
-        /// <summary>
-        /// Defines the labelTR
-        /// </summary>
-        private System.Windows.Forms.Label labelTR;
 
         /// <summary>
         /// Defines the labelDistanzaRilevata
@@ -594,5 +521,7 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
+        private System.Windows.Forms.Button btnScanMisure;
+        private System.Windows.Forms.Button btnScanGrafico;
     }
 }
