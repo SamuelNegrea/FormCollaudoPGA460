@@ -63,6 +63,7 @@
             btnScanGrafico = new System.Windows.Forms.Button();
             btnSaveConfigFile = new System.Windows.Forms.Button();
             btnLoadConfigFile = new System.Windows.Forms.Button();
+            label4 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)dgvRegisters).BeginInit();
             ((System.ComponentModel.ISupportInitialize)pictureBoxDump).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numDistanceSet).BeginInit();
@@ -72,7 +73,7 @@
             // 
             // txtIndirizzo
             // 
-            txtIndirizzo.Location = new System.Drawing.Point(161, 74);
+            txtIndirizzo.Location = new System.Drawing.Point(161, 76);
             txtIndirizzo.Name = "txtIndirizzo";
             txtIndirizzo.Size = new System.Drawing.Size(147, 23);
             txtIndirizzo.TabIndex = 3;
@@ -107,7 +108,7 @@
             // labelIndirizzo
             // 
             labelIndirizzo.AutoSize = true;
-            labelIndirizzo.Location = new System.Drawing.Point(83, 76);
+            labelIndirizzo.Location = new System.Drawing.Point(84, 79);
             labelIndirizzo.Name = "labelIndirizzo";
             labelIndirizzo.Size = new System.Drawing.Size(51, 15);
             labelIndirizzo.TabIndex = 4;
@@ -126,14 +127,14 @@
             // 
             cmbCom.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cmbCom.FormattingEnabled = true;
-            cmbCom.Location = new System.Drawing.Point(182, 23);
+            cmbCom.Location = new System.Drawing.Point(187, 33);
             cmbCom.Name = "cmbCom";
             cmbCom.Size = new System.Drawing.Size(121, 23);
             cmbCom.TabIndex = 6;
             // 
             // btnConnect
             // 
-            btnConnect.Location = new System.Drawing.Point(357, 25);
+            btnConnect.Location = new System.Drawing.Point(356, 33);
             btnConnect.Name = "btnConnect";
             btnConnect.Size = new System.Drawing.Size(75, 31);
             btnConnect.TabIndex = 7;
@@ -235,7 +236,7 @@
             // labelPorta
             // 
             labelPorta.AutoSize = true;
-            labelPorta.Location = new System.Drawing.Point(83, 26);
+            labelPorta.Location = new System.Drawing.Point(83, 33);
             labelPorta.Name = "labelPorta";
             labelPorta.Size = new System.Drawing.Size(66, 15);
             labelPorta.TabIndex = 20;
@@ -280,21 +281,21 @@
             // 
             // numDistanceSet
             // 
-            numDistanceSet.Location = new System.Drawing.Point(135, 488);
+            numDistanceSet.Location = new System.Drawing.Point(168, 488);
             numDistanceSet.Name = "numDistanceSet";
             numDistanceSet.Size = new System.Drawing.Size(120, 23);
             numDistanceSet.TabIndex = 26;
             // 
             // numWidthSet
             // 
-            numWidthSet.Location = new System.Drawing.Point(135, 530);
+            numWidthSet.Location = new System.Drawing.Point(168, 526);
             numWidthSet.Name = "numWidthSet";
             numWidthSet.Size = new System.Drawing.Size(120, 23);
             numWidthSet.TabIndex = 27;
             // 
             // numAmplitudeSet
             // 
-            numAmplitudeSet.Location = new System.Drawing.Point(135, 572);
+            numAmplitudeSet.Location = new System.Drawing.Point(168, 573);
             numAmplitudeSet.Name = "numAmplitudeSet";
             numAmplitudeSet.Size = new System.Drawing.Size(120, 23);
             numAmplitudeSet.TabIndex = 28;
@@ -363,9 +364,19 @@
             btnLoadConfigFile.Text = "Carica da file";
             btnLoadConfigFile.UseVisualStyleBackColor = true;
             // 
+            // label4
+            // 
+            label4.AutoSize = true;
+            label4.Location = new System.Drawing.Point(13, 6);
+            label4.Name = "label4";
+            label4.Size = new System.Drawing.Size(322, 15);
+            label4.TabIndex = 36;
+            label4.Text = "PROGEL ENGINEERING S.R.L.   PGA460 Configurator. Rev 2.0";
+            // 
             // Form1
             // 
             ClientSize = new System.Drawing.Size(1384, 861);
+            Controls.Add(label4);
             Controls.Add(btnLoadConfigFile);
             Controls.Add(btnSaveConfigFile);
             Controls.Add(btnScanGrafico);
@@ -524,5 +535,6 @@
         private System.Windows.Forms.Button btnScanGrafico;
         private System.Windows.Forms.Button btnSaveConfigFile;
         private System.Windows.Forms.Button btnLoadConfigFile;
+        private System.Windows.Forms.Label label4;
     }
 }

@@ -27,6 +27,7 @@ namespace FormCollaudoPGA460
         private bool combinedScanEnabled = false;
         private ScanPhase currentScanPhase = ScanPhase.Grafico;
         private const int SCAN_PHASE_INTERVAL_MS = 300;
+        private volatile bool graficoRequested = false;
         private byte[] virtualRegs = new byte[256];
         private bool offlineMode = false;
         private DataGridView dgvFields;
@@ -39,12 +40,12 @@ namespace FormCollaudoPGA460
 
         private void LoadDefaultRegisters()
         {
-            WriteRegister(0x14, 0xB5);
+            WriteRegister(0x14, 0xA5);
             WriteRegister(0x15, 0x69);
             WriteRegister(0x16, 0xAA);
-            WriteRegister(0x17, 0x1C);
-            WriteRegister(0x18, 0x71);
-            WriteRegister(0x19, 0xC1);
+            WriteRegister(0x17, 0x79);
+            WriteRegister(0x18, 0xE7);
+            WriteRegister(0x19, 0x9E);
             WriteRegister(0x1A, 0x04);
             WriteRegister(0x1B, 0x40);
             WriteRegister(0x1C, 0x5A);
@@ -57,7 +58,7 @@ namespace FormCollaudoPGA460
             WriteRegister(0x23, 0x00);
             WriteRegister(0x24, 0xEE);
             WriteRegister(0x25, 0x7C);
-            WriteRegister(0x26, 0x4A);
+            WriteRegister(0x26, 0x0A);
 
             WriteRegister(0x29, 0x09);
 
@@ -591,6 +592,8 @@ namespace FormCollaudoPGA460
 
                 misura_to_result.Elapsed += misura_to_result_Elapsed;
 
+                dgvFields.CellEndEdit += dgvFields_CellEndEdit;
+
             }
             catch (Exception ex)
             {
@@ -622,7 +625,7 @@ namespace FormCollaudoPGA460
             scanEnabled = true;
             misureScanEnabled = false;
 
-            WriteRegister(0x40, 0x80);
+            WriteRegister(0x40, 0x80, force: true);
 
             SendBurst();
 
@@ -639,7 +642,7 @@ namespace FormCollaudoPGA460
             misureScanEnabled = true;
             scanEnabled = false;
 
-            WriteRegister(0x40, 0x00);
+            WriteRegister(0x40, 0x00, force: true);
 
             SendBurst();
 
@@ -672,25 +675,7 @@ namespace FormCollaudoPGA460
             if (!combinedScanEnabled)
                 return;
 
-            try
-            {
-                FlushSerialBuffer();
-
-            if (currentScanPhase == ScanPhase.Grafico)
-                StartMisurePhase();
-            else
-                StartGraficoPhase();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("[burst_interval_Elapsed] connessione persa, fermo lo scan: " + ex.Message);
-
-                BeginInvoke(new System.Windows.Forms.MethodInvoker(() =>
-                {
-                    StopCombinedScan();
-                    MessageBox.Show("Connessione al PGA460 persa: scansione interrotta.");
-                }));
-            }
+            graficoRequested = true;
         }
 
         private void misura_to_result_Elapsed(object sender, ElapsedEventArgs e)
@@ -704,6 +689,34 @@ namespace FormCollaudoPGA460
                 BeginInvoke(new System.Windows.Forms.MethodInvoker(() =>
                 {
                     DecodeMeasurement(rx);
+                }));
+            }
+
+            if (!combinedScanEnabled)
+                return;
+
+            try
+            {
+                FlushSerialBuffer();
+
+                if (graficoRequested)
+                {
+                    graficoRequested = false;
+                    StartGraficoPhase();
+                }
+                else
+                {
+                    StartMisurePhase();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[misura_to_result_Elapsed] connessione persa, fermo lo scan: " + ex.Message);
+
+                BeginInvoke(new System.Windows.Forms.MethodInvoker(() =>
+                {
+                    StopCombinedScan();
+                    MessageBox.Show("Connessione al PGA460 persa: scansione interrotta.");
                 }));
             }
         }
@@ -727,6 +740,7 @@ namespace FormCollaudoPGA460
             {
                 lock (serialLock)
                 {
+                    serial.DiscardInBuffer();
                     serial.Write(frame, 0, frame.Length);
                 }
             }
@@ -801,6 +815,7 @@ namespace FormCollaudoPGA460
             {
                 Debug.WriteLine("[burst_decoding] Dump non valido o incompleto");
                 MessageBox.Show("Dump non valido");
+                ResumeMisureLoopAfterGrafico();
                 return;
             }
 
@@ -833,6 +848,30 @@ namespace FormCollaudoPGA460
             lastEchoDump = (byte[])samples.Clone();
 
             SafeDrawDump(lastEchoDump);
+
+            ResumeMisureLoopAfterGrafico();
+        }
+
+        private void ResumeMisureLoopAfterGrafico()
+        {
+            if (!combinedScanEnabled)
+                return;
+
+            try
+            {
+                FlushSerialBuffer();
+                StartMisurePhase();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[ResumeMisureLoopAfterGrafico] connessione persa, fermo lo scan: " + ex.Message);
+
+                BeginInvoke(new System.Windows.Forms.MethodInvoker(() =>
+                {
+                    StopCombinedScan();
+                    MessageBox.Show("Connessione al PGA460 persa: scansione interrotta.");
+                }));
+            }
         }
 
         private void LoadComPorts()
@@ -908,37 +947,50 @@ namespace FormCollaudoPGA460
             }
         }
 
+        private void WriteConfiguration()
+        {
+            ReadFieldsGrid();
+
+            forceRegisterWrite = true;
+
+            try
+            {
+                EncodeRegisters14To6E();
+            }
+            finally
+            {
+                forceRegisterWrite = false;
+            }
+
+            refreshGraph = true;
+
+            if (lastEchoDump != null)
+                DrawDump(lastEchoDump);
+        }
+
         private void btnWriteConfig_Click(object sender, EventArgs e)
         {
             try
             {
-
-                ReadFieldsGrid();
-                Debug.WriteLine($"Reg40 cache prima dell'encode = {virtualRegs[0x40]:X2}");
-                forceRegisterWrite = true;
-                try
-                {
-                    EncodeRegisters14To6E();
-                }
-                finally
-                {
-                    forceRegisterWrite = false;
-                }
-                Debug.WriteLine($"Reg40 cache dopo l'encode = {virtualRegs[0x40]:X2}");
-                refreshGraph = true;
-
-                if (lastEchoDump != null)
-                    DrawDump(lastEchoDump);
+                WriteConfiguration();
 
                 if (offlineMode)
                     VirtualRegistersToGrid();
 
-                MessageBox.Show(offlineMode ? "Encode completato" : "Configurazione scritta nel PGA460");
+                MessageBox.Show(
+                    offlineMode ?
+                    "Encode completato" :
+                    "Configurazione scritta nel PGA460");
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
             }
+        }
+
+        private void dgvFields_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            WriteConfiguration();
         }
 
         private void InitGrid()
@@ -1729,8 +1781,7 @@ namespace FormCollaudoPGA460
             offlineMode = prevOfflineModeLoad;
             //ReadFieldsGrid();
             UpdateFieldsGrid();
-
-        
+            WriteConfiguration();
             refreshGraph = true;
 
             if (lastEchoDump != null)
