@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.IO.Ports;
 using System.Linq;
 using System.Reflection;
@@ -16,12 +17,16 @@ namespace FormCollaudoPGA460
     {
         SerialPort serial;
         private System.Windows.Forms.Timer scanTimer = new();
-        //private Timer scanTimer = new Timer();
-        //private System.Windows.Forms.Timer scanTimer = new System.Windows.Forms.Timer();
         private bool scanEnabled = false;
         private bool scanEnabled_prec = false;
         private bool misureScanEnabled = false;
         private bool misureScanEnabled_prec = false;
+
+        // --- Pulsante unico "Attiva Scan": alterna ciclicamente Grafico <-> Misure ---
+        private enum ScanPhase { Grafico, Misure }
+        private bool combinedScanEnabled = false;
+        private ScanPhase currentScanPhase = ScanPhase.Grafico;
+        private const int SCAN_PHASE_INTERVAL_MS = 300;
         private byte[] virtualRegs = new byte[256];
         private bool offlineMode = false;
         private DataGridView dgvFields;
@@ -29,19 +34,19 @@ namespace FormCollaudoPGA460
         private volatile bool refreshGraph = true;
         private List<PointF> cachedThresholdPts = null;
         private List<PointF> cachedGainPts = null;
-
-
+        private byte[] lastEchoDump = new byte[128];
+        private bool forceRegisterWrite = false;
 
         private void LoadDefaultRegisters()
         {
-            WriteRegister(0x14, 0xAA);
-            WriteRegister(0x15, 0x09);
+            WriteRegister(0x14, 0xB5);
+            WriteRegister(0x15, 0x69);
             WriteRegister(0x16, 0xAA);
-            WriteRegister(0x17, 0x3D);
-            WriteRegister(0x18, 0xC9);
-            WriteRegister(0x19, 0x00);
-            WriteRegister(0x1A, 0x00);
-            WriteRegister(0x1B, 0x4D);
+            WriteRegister(0x17, 0x1C);
+            WriteRegister(0x18, 0x71);
+            WriteRegister(0x19, 0xC1);
+            WriteRegister(0x1A, 0x04);
+            WriteRegister(0x1B, 0x40);
             WriteRegister(0x1C, 0x5A);
             WriteRegister(0x1D, 0x05);
             WriteRegister(0x1E, 0x08);
@@ -52,12 +57,12 @@ namespace FormCollaudoPGA460
             WriteRegister(0x23, 0x00);
             WriteRegister(0x24, 0xEE);
             WriteRegister(0x25, 0x7C);
-            WriteRegister(0x26, 0x0A);
+            WriteRegister(0x26, 0x4A);
 
             WriteRegister(0x29, 0x09);
 
-            WriteRegister(0x5F, 0x88);
-            WriteRegister(0x60, 0x88);
+            WriteRegister(0x5F, 0xAF);
+            WriteRegister(0x60, 0xC8);
             WriteRegister(0x61, 0x88);
             WriteRegister(0x62, 0x88);
             WriteRegister(0x63, 0x88);
@@ -73,8 +78,8 @@ namespace FormCollaudoPGA460
             WriteRegister(0x6B, 0x80);
             WriteRegister(0x6C, 0x80);
             WriteRegister(0x6D, 0x80);
-            WriteRegister(0x6E, 0x00);
-        }
+            WriteRegister(0x6E, 0x00); 
+    }
 
         private class PGA460Fields
         {
@@ -174,7 +179,6 @@ namespace FormCollaudoPGA460
             public byte TH_P1_L12;
 
             public byte TH_P1_OFF;
-
 
         }
 
@@ -512,106 +516,181 @@ namespace FormCollaudoPGA460
         private static System.Timers.Timer burst_to_dump;
         private static System.Timers.Timer burst_decoding;
         private static System.Timers.Timer misura_to_result;
-        private static System.Timers.Timer misura_interval;
 
         public Form1()
         {
             InitializeComponent();
 
-            numBurstInterval.Minimum = 10;
-            numBurstInterval.Maximum = 100;
-            numBurstInterval.Value = 50;
+            this.Load += Form1_Load;
 
-            numDistanceSet.Minimum = 0;
-            numDistanceSet.Maximum = 10000;
+            try
+            {
+                numDistanceSet.Minimum = 0;
+                numDistanceSet.Maximum = 10000;
 
-            numWidthSet.Minimum = 0;
-            numWidthSet.Maximum = 255;
+                numWidthSet.Minimum = 0;
+                numWidthSet.Maximum = 255;
 
-            numAmplitudeSet.Minimum = 0;
-            numAmplitudeSet.Maximum = 255;
+                numAmplitudeSet.Minimum = 0;
+                numAmplitudeSet.Maximum = 255;
 
-            chkObjectDetect.Checked = true;
+                chkObjectDetect.Checked = true;
 
-            LoadComPorts();
+                LoadComPorts();
 
-            btnConnect.Click += btnConnect_Click;
-
-
-            InitGrid();
-            LoadRegisters();
-
-            InitFieldsGrid();
-            VirtualRegistersToGrid();
-            UpdateFieldsGrid();
-
-            panelTrigger.BackColor = Color.LightGray;
-
-            panelTrigger.BorderStyle = BorderStyle.FixedSingle;
-
-            btnScanMisure.Click += btnScanMisure_Click;
-            btnScanGrafico.Click += btnScanGrafico_Click;
-
-            scanTimer.Interval = 1000;
-
-            btnReadConfig.Click += btnReadConfig_Click;
-            btnWriteConfig.Click += btnWriteConfig_Click;
-
-            burst_to_dump = new System.Timers.Timer(50);      // intervallo in ms
-
-            burst_to_dump.AutoReset = false;       // ripete automaticamente
-
-            burst_to_dump.Elapsed += burst_to_dump_Elapsed;   // handler dell’evento
+                btnConnect.Click += btnConnect_Click;
 
 
+                InitGrid();
+                LoadRegisters();
 
-            burst_decoding = new System.Timers.Timer(200);
+                InitFieldsGrid();
+                VirtualRegistersToGrid();
+                UpdateFieldsGrid();
 
-            burst_decoding.AutoReset = false;       // ripete automaticamente
+                panelTrigger.BackColor = Color.LightGray;
 
-            burst_decoding.Elapsed += burst_decoding_Elapsed;  // handler dell’evento
+                panelTrigger.BorderStyle = BorderStyle.FixedSingle;
 
-            burst_interval = new System.Timers.Timer(1000);      // intervallo in ms
+                // btnScanMisure non è più usato singolarmente: il pulsante unico
+                // btnScanGrafico ("Attiva Scan") alterna ciclicamente grafico/misure.
+                btnScanGrafico.Click += btnScanGrafico_Click;
 
-            burst_interval.Elapsed += burst_interval_Elapsed;
+                scanTimer.Interval = 1000;
 
-            burst_interval.AutoReset = true;       // ripete automaticamente
+                btnReadConfig.Click += btnReadConfig_Click;
+                btnWriteConfig.Click += btnWriteConfig_Click;
 
-            // --- Sezione MISURE: timer indipendenti, non toccano quelli sopra ---
-            misura_to_result = new System.Timers.Timer(50);      // intervallo in ms
+                btnSaveConfigFile.Click += btnSaveConfigFile_Click;
+                btnLoadConfigFile.Click += btnLoadConfigFile_Click;
 
-            misura_to_result.AutoReset = false;
+                burst_to_dump = new System.Timers.Timer(50);      // intervallo in ms
 
-            misura_to_result.Elapsed += misura_to_result_Elapsed;
+                burst_to_dump.AutoReset = false;       // ripete automaticamente
 
-            misura_interval = new System.Timers.Timer(1000);      // intervallo in ms
+                burst_to_dump.Elapsed += burst_to_dump_Elapsed;   // handler dell’evento
 
-            misura_interval.Elapsed += misura_interval_Elapsed;
-            misura_interval.AutoReset = true;
 
+
+                burst_decoding = new System.Timers.Timer(200);
+
+                burst_decoding.AutoReset = false;       // ripete automaticamente
+
+                burst_decoding.Elapsed += burst_decoding_Elapsed;  // handler dell’evento
+
+                burst_interval = new System.Timers.Timer(SCAN_PHASE_INTERVAL_MS);      // intervallo in ms (300ms)
+
+                burst_interval.Elapsed += burst_interval_Elapsed;
+
+                burst_interval.AutoReset = true;       // ripete automaticamente: scandisce il cambio fase Grafico/Misure
+
+                // --- Sezione MISURE: timer indipendenti, non toccano quelli sopra ---
+                misura_to_result = new System.Timers.Timer(50);      // intervallo in ms
+
+                misura_to_result.AutoReset = false;
+
+                misura_to_result.Elapsed += misura_to_result_Elapsed;
+
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Form1 ctor] initialization error: " + ex.ToString());
+                MessageBox.Show("Errore inizializzazione: " + ex.ToString());
+                // Do not rethrow to avoid terminating the application; allow user to inspect UI and logs.
+            }
         }
 
-
-
-        private void burst_interval_Elapsed(object sender, ElapsedEventArgs e)
-
+        private void Form1_Load(object sender, EventArgs e)
         {
+            try
+            {
+                refreshGraph = true;
+                SafeDrawDump(lastEchoDump);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Form1_Load] errore nel disegno iniziale del grafico: " + ex.Message);
+            }
+        }
+
+        // Avvia la fase "scan grafico": reg 0x40 = 0x80, invia il burst e
+        // fa partire la catena burst_to_dump -> burst_decoding per leggere il dump.
+        private void StartGraficoPhase()
+        {
+            currentScanPhase = ScanPhase.Grafico;
+
+            scanEnabled = true;
+            misureScanEnabled = false;
+
+            WriteRegister(0x40, 0x80);
+
             SendBurst();
 
-            //burst_to_dump.Enabled = true;         // avvia il timer
             burst_to_dump.Interval = 50;
             burst_to_dump.Start();
-
-
         }
 
-
-        private void misura_interval_Elapsed(object sender, ElapsedEventArgs e)
+        // Avvia la fase "scan misure": reg 0x40 = 0x00, invia il burst e
+        // fa partire misura_to_result per leggere la misura.
+        private void StartMisurePhase()
         {
+            currentScanPhase = ScanPhase.Misure;
+
+            misureScanEnabled = true;
+            scanEnabled = false;
+
+            WriteRegister(0x40, 0x00);
+
             SendBurst();
 
             misura_to_result.Interval = 50;
             misura_to_result.Start();
+        }
+
+        // Svuota il buffer seriale in ingresso tra una fase e l'altra.
+        private void FlushSerialBuffer()
+        {
+            try
+            {
+                lock (serialLock)
+                {
+                    if (serial != null && serial.IsOpen)
+                        serial.DiscardInBuffer();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[FlushSerialBuffer] errore: " + ex.Message);
+            }
+        }
+
+        // Scandisce ogni SCAN_PHASE_INTERVAL_MS (300ms) il cambio di fase:
+        // Grafico -> svuota buffer -> Misure -> svuota buffer -> Grafico -> ... in modo ciclico,
+        // finché il pulsante non ferma lo scan (combinedScanEnabled = false).
+        private void burst_interval_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            if (!combinedScanEnabled)
+                return;
+
+            try
+            {
+                FlushSerialBuffer();
+
+            if (currentScanPhase == ScanPhase.Grafico)
+                StartMisurePhase();
+            else
+                StartGraficoPhase();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[burst_interval_Elapsed] connessione persa, fermo lo scan: " + ex.Message);
+
+                BeginInvoke(new System.Windows.Forms.MethodInvoker(() =>
+                {
+                    StopCombinedScan();
+                    MessageBox.Show("Connessione al PGA460 persa: scansione interrotta.");
+                }));
+            }
         }
 
         private void misura_to_result_Elapsed(object sender, ElapsedEventArgs e)
@@ -630,11 +709,7 @@ namespace FormCollaudoPGA460
         }
 
         private void burst_to_dump_Elapsed(object sender, ElapsedEventArgs e)
-
         {
-
-            //burst_decoding.Enabled = true;         // avvia il timer
-
             burst_to_dump.Enabled = false;
 
             byte[] d = { 0x07 };
@@ -662,12 +737,6 @@ namespace FormCollaudoPGA460
 
             burst_decoding.Interval = 150;
             burst_decoding.Start();
-
-            /*int n = serial.BytesToRead;
-
-            byte[] rx = new byte[n];
-
-            serial.Read(rx, 0, n);*/
 
         }
 
@@ -704,8 +773,6 @@ namespace FormCollaudoPGA460
                             PACKET_SIZE - received);
 
                         received += n;
-
-                        Debug.WriteLine($"[ReadEchoDump] received chunk {n} bytes, total {received}/{PACKET_SIZE}");
                     }
                     else
                     {
@@ -713,20 +780,22 @@ namespace FormCollaudoPGA460
                     }
                 }
             }
-
-            Debug.WriteLine($"[ReadEchoDump] total received {received} bytes");
-
             return rx;
         }
 
         private void burst_decoding_Elapsed(object sender, ElapsedEventArgs e)
 
         {
+            if (!scanEnabled)
+                return;
+
             burst_decoding.Enabled = false;
-            Debug.WriteLine("messaggio ogni secondo" + var++);
 
 
             byte[] dump = ReadEchoDump();
+
+            if (dump != null)
+                Debug.WriteLine(BitConverter.ToString(dump.Take(16).ToArray()));
 
             if (dump == null || dump.Length < 130)
             {
@@ -754,15 +823,16 @@ namespace FormCollaudoPGA460
                     if (samples[i] > max) max = samples[i];
                 }
 
-                Debug.WriteLine($"[DUMP] samples len={samples.Length} first={samples[0]} mid={samples[samples.Length/2]} last={samples[samples.Length-1]} min={min} max={max}");
+                Debug.WriteLine($"[DUMP] samples len={samples.Length} first={samples[0]} mid={samples[samples.Length / 2]} last={samples[samples.Length - 1]} min={min} max={max}");
             }
             catch (Exception ex)
             {
                 Debug.WriteLine("[DUMP] diagnostic error: " + ex.Message);
             }
 
-            DrawDump(samples);
+            lastEchoDump = (byte[])samples.Clone();
 
+            SafeDrawDump(lastEchoDump);
         }
 
         private void LoadComPorts()
@@ -827,6 +897,9 @@ namespace FormCollaudoPGA460
 
                 refreshGraph = true;
 
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
+
                 MessageBox.Show(offlineMode ? "Decode completato" : "Configurazione letta dal PGA460");
             }
             catch (Exception ex)
@@ -839,10 +912,23 @@ namespace FormCollaudoPGA460
         {
             try
             {
-                ReadFieldsGrid();
-                EncodeRegisters14To6E();
 
+                ReadFieldsGrid();
+                Debug.WriteLine($"Reg40 cache prima dell'encode = {virtualRegs[0x40]:X2}");
+                forceRegisterWrite = true;
+                try
+                {
+                    EncodeRegisters14To6E();
+                }
+                finally
+                {
+                    forceRegisterWrite = false;
+                }
+                Debug.WriteLine($"Reg40 cache dopo l'encode = {virtualRegs[0x40]:X2}");
                 refreshGraph = true;
+
+                if (lastEchoDump != null)
+                    DrawDump(lastEchoDump);
 
                 if (offlineMode)
                     VirtualRegistersToGrid();
@@ -966,7 +1052,7 @@ namespace FormCollaudoPGA460
             lock (serialLock)
             {
                 serial.DiscardInBuffer();
-                serial.DiscardOutBuffer();
+                //serial.DiscardOutBuffer();
 
                 serial.Write(frame, 0, frame.Length);
 
@@ -996,7 +1082,7 @@ namespace FormCollaudoPGA460
         }
 
 
-        private void WriteRegister(byte addr, byte value)
+        private void WriteRegister(byte addr, byte value, bool force = false)
         {
             // For offline mode just update virtual registers
             if (offlineMode)
@@ -1007,21 +1093,24 @@ namespace FormCollaudoPGA460
                 return;
             }
 
-            if (serial == null || !serial.IsOpen)
-                throw new Exception("Connettere prima la porta COM");
+            /*if (serial == null || !serial.IsOpen)
+                throw new Exception("Connettere prima la porta COM");*/
 
-            // Skip physical write when cached value equals desired value to avoid unnecessary writes
-            try
+            if (!force && !forceRegisterWrite)
             {
-                if (virtualRegs[addr] == value)
+                // Skip physical write when cached value equals desired value to avoid unnecessary writes
+                try
                 {
-                    Debug.WriteLine($"[WriteRegister] skip addr=0x{addr:X2} value=0x{value:X2} (no change)");
-                    return;
+                    if (virtualRegs[addr] == value)
+                    {
+                        Debug.WriteLine($"[WriteRegister] skip addr=0x{addr:X2} value=0x{value:X2} (no change)");
+                        return;
+                    }
                 }
-            }
-            catch
-            {
-                // If virtualRegs access fails for any reason, proceed with write
+                catch
+                {
+                    // If virtualRegs access fails for any reason, proceed with write
+                }
             }
 
             byte[] frame = BuildWrite(addr, value);
@@ -1031,7 +1120,9 @@ namespace FormCollaudoPGA460
             {
                 try
                 {
+                    serial.DiscardInBuffer();
                     serial.Write(frame, 0, frame.Length);
+                    Thread.Sleep(2);
                     // update cached virtual register after successful transmission
                     virtualRegs[addr] = value;
 
@@ -1071,7 +1162,7 @@ namespace FormCollaudoPGA460
             dgvFields = new DataGridView();
 
             dgvFields.Location = new Point(599, 15);
-            dgvFields.Size = new Size(729, 185);
+            dgvFields.Size = new Size(729, 265);
             dgvFields.AllowUserToAddRows = false;
             dgvFields.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
 
@@ -1342,8 +1433,6 @@ namespace FormCollaudoPGA460
             }
         }
 
-
-
         private void UpdateFieldsGrid()
         {
             foreach (DataGridViewRow row in dgvFields.Rows)
@@ -1383,6 +1472,13 @@ namespace FormCollaudoPGA460
 
                     row.Cells[2].Value = value.ToString("X2");
                 }
+
+                bool prevOfflineMode = offlineMode;
+                offlineMode = true;
+                DecodeRegisters14To6E();
+                offlineMode = prevOfflineMode;
+
+                UpdateFieldsGrid();
             }
             catch (Exception ex)
             {
@@ -1408,7 +1504,7 @@ namespace FormCollaudoPGA460
 
                 serial.Write(frame, 0, frame.Length);
 
-                MessageBox.Show("TX: " + BitConverter.ToString(frame));
+                MessageBox.Show($"Registro 0x{addr:X2} scritto con successo.");
             }
             catch (Exception ex)
             {
@@ -1430,7 +1526,7 @@ namespace FormCollaudoPGA460
 
                 byte[] frame = BuildRead(addr);
 
-                MessageBox.Show("TX = " + BitConverter.ToString(frame));
+               
 
                 lock (serialLock)
                 {
@@ -1455,7 +1551,7 @@ namespace FormCollaudoPGA460
 
                     serial.Read(rx, 0, 3);
 
-                    MessageBox.Show("RX: " + BitConverter.ToString(rx));
+                    MessageBox.Show($"Registro 0x{addr:X2} letto con valore 0x{rx[1]:X2}");
 
                     txtValore.Text = rx[1].ToString("X2");
                 }
@@ -1464,6 +1560,182 @@ namespace FormCollaudoPGA460
             {
                 MessageBox.Show("Errore LEGGI: " + ex.Message);
             }
+        }
+
+        // Salva su file: registri (Addr/Value), campi decodificati (Name/Value) e le
+        // ultime misure (Distanza/Dimensione/Intensità) attualmente mostrate in UI.
+        private void btnSaveConfigFile_Click(object sender, EventArgs e)
+        {
+            using (SaveFileDialog dlg = new SaveFileDialog())
+            {
+                dlg.Filter = "File configurazione PGA460 (*.pga460cfg)|*.pga460cfg|Tutti i file (*.*)|*.*";
+                dlg.FileName = "config.pga460cfg";
+
+                if (dlg.ShowDialog() != DialogResult.OK)
+                    return;
+
+                try
+                {
+                    SaveConfigToFile(dlg.FileName);
+                    MessageBox.Show("Configurazione salvata su file.");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Errore durante il salvataggio:\n" + ex.Message);
+                }
+            }
+        }
+
+        // Carica da file: ripopola i registri, i campi decodificati e le misure
+        // nelle rispettive griglie/textbox. Non scrive nulla sul PGA460: per
+        // inviare la configurazione caricata all'hardware usare "Scrivi Configurazione".
+        private void btnLoadConfigFile_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dlg = new OpenFileDialog())
+            {
+                dlg.Filter = "File configurazione PGA460 (*.pga460cfg)|*.pga460cfg|Tutti i file (*.*)|*.*";
+
+                if (dlg.ShowDialog() != DialogResult.OK)
+                    return;
+
+                try
+                {
+                    LoadConfigFromFile(dlg.FileName);
+                    MessageBox.Show("Configurazione caricata da file.");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Errore durante il caricamento:\n" + ex.Message);
+                }
+            }
+        }
+
+        private void SaveConfigToFile(string path)
+        {
+            using (StreamWriter sw = new StreamWriter(path, false))
+            {
+                sw.WriteLine("; File di configurazione PGA460 - FormCollaudoPGA460");
+                sw.WriteLine("; Generato il " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                sw.WriteLine();
+
+                sw.WriteLine("[Registers]");
+                foreach (DataGridViewRow row in dgvRegisters.Rows)
+                {
+                    string addr = row.Cells[0].Value?.ToString() ?? "";
+                    string name = row.Cells[1].Value?.ToString() ?? "";
+                    string value = row.Cells[2].Value?.ToString() ?? "00";
+
+                    if (addr.Length == 0)
+                        continue;
+
+                    sw.WriteLine($"{addr}={value} ; {name}");
+                }
+
+                sw.WriteLine();
+                sw.WriteLine("[Fields]");
+                foreach (DataGridViewRow row in dgvFields.Rows)
+                {
+                    string name = row.Cells[0].Value?.ToString() ?? "";
+                    string value = row.Cells[1].Value?.ToString() ?? "0";
+
+                    if (name.Length == 0)
+                        continue;
+
+                    sw.WriteLine($"{name}={value}");
+                }
+
+                sw.WriteLine();
+                sw.WriteLine("[Measure]");
+                sw.WriteLine($"Distance={txtDistance.Text}");
+                sw.WriteLine($"Width={txtWidth.Text}");
+                sw.WriteLine($"Amplitude={txtAmplitude.Text}");
+            }
+        }
+
+        private void LoadConfigFromFile(string path)
+        {
+            var registers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            //var fieldsValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var measure = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            string section = "";
+
+            foreach (string rawLine in File.ReadAllLines(path))
+            {
+                string line = rawLine.Trim();
+
+                if (line.Length == 0 || line.StartsWith(";"))
+                    continue;
+
+                if (line.StartsWith("[") && line.EndsWith("]"))
+                {
+                    section = line.Substring(1, line.Length - 2).Trim();
+                    continue;
+                }
+
+                int eq = line.IndexOf('=');
+                if (eq < 0)
+                    continue;
+
+                string key = line.Substring(0, eq).Trim();
+                string value = line.Substring(eq + 1).Trim();
+
+                // Rimuove un eventuale commento in coda ("; Nome registro")
+                int comment = value.IndexOf(';');
+                if (comment >= 0)
+                    value = value.Substring(0, comment).Trim();
+
+                switch (section)
+                {
+                    case "Registers":
+                        registers[key] = value;
+                        break;
+                    /*case "Fields":
+                        fieldsValues[key] = value;
+                        break;*/
+                    case "Measure":
+                        measure[key] = value;
+                        break;
+                }
+            }
+
+            // Ripopola la griglia registri (match per indirizzo esadecimale)
+            foreach (DataGridViewRow row in dgvRegisters.Rows)
+            {
+                string addr = row.Cells[0].Value?.ToString() ?? "";
+
+                if (addr.Length > 0 && registers.TryGetValue(addr, out string val))
+                    row.Cells[2].Value = val;
+            }
+
+            // Ripopola le ultime misure mostrate in UI
+            if (measure.TryGetValue("Distance", out string distance))
+                txtDistance.Text = distance;
+
+            if (measure.TryGetValue("Width", out string width))
+                txtWidth.Text = width;
+
+            if (measure.TryGetValue("Amplitude", out string amplitude))
+                txtAmplitude.Text = amplitude;
+
+            // Sincronizza la cache interna (virtualRegs) e l'oggetto "fields" con
+            // i valori appena caricati, così i dati letti dal file sono coerenti
+            // con quanto mostrato in UI, senza però inviare nulla al PGA460.
+            GridToVirtualRegisters();
+
+            bool prevOfflineModeLoad = offlineMode;
+            offlineMode = true;
+            DecodeRegisters14To6E();
+            offlineMode = prevOfflineModeLoad;
+            //ReadFieldsGrid();
+            UpdateFieldsGrid();
+
+        
+            refreshGraph = true;
+
+            if (lastEchoDump != null)
+                SafeDrawDump(lastEchoDump);
+
         }
 
         private byte[] BuildRead(byte addr)
@@ -1517,7 +1789,7 @@ namespace FormCollaudoPGA460
 
                 byte value = Convert.ToByte(dgvRegisters.Rows[e.RowIndex].Cells[2].Value.ToString(), 16);
 
-                WriteRegister(addr, value);
+                WriteRegister(addr, value, force: true);
 
                 MessageBox.Show($"Registro {addr:X2} scritto con valore {value:X2}");
             }
@@ -1527,60 +1799,66 @@ namespace FormCollaudoPGA460
             }
         }
 
-        private void btnScanMisure_Click(object sender, EventArgs e)
+        // Ferma il ciclo combinato Grafico/Misure e tutti i timer di catena.
+        private void StopCombinedScan()
         {
-            misureScanEnabled = !misureScanEnabled;
+            combinedScanEnabled = false;
 
-            if (misureScanEnabled)
-            {
-                // Set point di modalità (reg 0x40 = 0x00) scritto una sola
-                // volta, all'avvio dello scan misure.
-                WriteRegister(0x40, 0x00);
-            }
+            scanEnabled = false;
+            scanEnabled_prec = false;
 
-            if ((misureScanEnabled == true) && (misureScanEnabled_prec == false))
-            {
-                misureScanEnabled_prec = true;
+            misureScanEnabled = false;
+            misureScanEnabled_prec = false;
 
-                misura_interval.Enabled = true;         // avvia il timer
-            }
+            burst_interval.Enabled = false;
+            burst_to_dump.Enabled = false;
+            burst_decoding.Enabled = false;
+            misura_to_result.Enabled = false;
 
-            if ((misureScanEnabled == false) && (misureScanEnabled_prec == true))
-            {
-                misura_interval.Enabled = false;
-                misureScanEnabled_prec = false;
-            }
-
-            btnScanMisure.BackColor = misureScanEnabled ? Color.LimeGreen : SystemColors.Control;
-            btnScanMisure.Text = misureScanEnabled ? "Ferma Scan Misure" : "Attiva Scan Misure";
+            btnScanGrafico.BackColor = SystemColors.Control;
+            btnScanGrafico.Text = "Attiva Scan";
         }
 
+        // Pulsante unico: al primo click avvia il ciclo (parte dalla fase Grafico),
+        // al click successivo lo ferma. Il ciclo alterna automaticamente
+        // Grafico (reg 0x40 = 0x80) e Misure (reg 0x40 = 0x00) ogni 300ms,
+        // svuotando il buffer seriale ad ogni cambio fase (vedi burst_interval_Elapsed).
         private void btnScanGrafico_Click(object sender, EventArgs e)
         {
-            scanEnabled = !scanEnabled;
-
-            if (scanEnabled)
+            if (combinedScanEnabled)
             {
-                // Set point di modalità (reg 0x40 = 0x80, DATADUMP_EN) scritto
-                // una sola volta, all'avvio dello scan grafico.
-                WriteRegister(0x40, 0x80);
+                StopCombinedScan();
+                return;
             }
 
-            if ((scanEnabled == true) && (scanEnabled_prec == false))
+            if (!offlineMode && (serial == null || !serial.IsOpen))
             {
-                scanEnabled_prec = true;
-
-                burst_interval.Enabled = true;         // avvia il timer
+                MessageBox.Show("Connettere prima la porta COM per avviare la scansione.");
+                return;
             }
 
-            if ((scanEnabled == false) && (scanEnabled_prec == true))
-            {
-                burst_interval.Enabled = false;
-                scanEnabled_prec = false;
-            }
+            combinedScanEnabled = true;
 
-            btnScanGrafico.BackColor = scanEnabled ? Color.LimeGreen : SystemColors.Control;
-            btnScanGrafico.Text = scanEnabled ? "Ferma Scan Grafico" : "Attiva Scan Grafico";
+            burst_interval.Interval = SCAN_PHASE_INTERVAL_MS;
+            burst_interval.AutoReset = true;
+
+            // Avvia subito la prima fase (Grafico); il timer da 300ms scandirà
+            try
+            {
+                // i cambi fase successivi.
+                StartGraficoPhase();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[btnScanGrafico_Click] impossibile avviare lo scan: " + ex.Message);
+                MessageBox.Show("Impossibile avviare la scansione: " + ex.Message);
+                StopCombinedScan();
+                return;
+            }
+            burst_interval.Enabled = true;
+
+            btnScanGrafico.BackColor = Color.LimeGreen;
+            btnScanGrafico.Text = "Ferma Scan";
         }
 
         private void SendBurst()
@@ -1645,6 +1923,7 @@ namespace FormCollaudoPGA460
                 serial.Read(rx, 0, 6);
 
                 return rx;
+              
             }
         }
 
@@ -1673,7 +1952,7 @@ namespace FormCollaudoPGA460
                 return;
             }
 
-            bool distanceOk = (distanceSet == 0) || (distance >= distanceSet);
+            bool distanceOk = (distanceSet == 0) || (distance <= distanceSet);
 
             bool sizeOk = (sizeSet == 0) || (size >= sizeSet);
 
@@ -1681,11 +1960,12 @@ namespace FormCollaudoPGA460
 
             bool detected = distanceOk && sizeOk && intensityOk;
 
-            panelTrigger.BackColor = detected ? Color.LimeGreen : Color.LightGray;
+            panelTrigger.BackColor = detected ? Color.Red : Color.LightGray;
         }
 
         private void DecodeMeasurement(byte[] rx)
         {
+            Debug.WriteLine("MEASURE RX = " + BitConverter.ToString(rx));
 
             if (rx == null || rx.Length < 5)
                 return;
@@ -1707,15 +1987,21 @@ namespace FormCollaudoPGA460
             CheckObjectDetected(distanceCm, size, intensity);
         }
 
-        private void NumBurstInterval_ValueChanged(object sender, EventArgs e)
+
+        private void SafeDrawDump(byte[] samples)
         {
-            scanTimer.Interval = (int)numBurstInterval.Value;
+            if (pictureBoxDump.IsHandleCreated && pictureBoxDump.InvokeRequired)
+            {
+                pictureBoxDump.BeginInvoke(new Action<byte[]>(SafeDrawDump), samples);
+                return;
+            }
+
+            DrawDump(samples);
         }
 
 
         private void DrawDump(byte[] samples)
         {
-            //DecodeRegisters14To6E();
 
             Bitmap bmp = new Bitmap(pictureBoxDump.Width, pictureBoxDump.Height);
 
@@ -1850,89 +2136,130 @@ namespace FormCollaudoPGA460
 
             int[] T =
             {
-        fields.TH_P1_T1,
-        fields.TH_P1_T2,
-        fields.TH_P1_T3,
-        fields.TH_P1_T4,
-        fields.TH_P1_T5,
-        fields.TH_P1_T6,
-        fields.TH_P1_T7,
-        fields.TH_P1_T8,
-        fields.TH_P1_T9,
-        fields.TH_P1_T10,
-        fields.TH_P1_T11,
-        fields.TH_P1_T12
-    };
+           fields.TH_P1_T1,
+           fields.TH_P1_T2,
+           fields.TH_P1_T3,
+           fields.TH_P1_T4,
+           fields.TH_P1_T5,
+           fields.TH_P1_T6,
+           fields.TH_P1_T7,
+           fields.TH_P1_T8,
+           fields.TH_P1_T9,
+           fields.TH_P1_T10,
+           fields.TH_P1_T11,
+           fields.TH_P1_T12
+       };
 
             int[] L =
             {
-        fields.TH_P1_L1,
-        fields.TH_P1_L2,
-        fields.TH_P1_L3,
-        fields.TH_P1_L4,
-        fields.TH_P1_L5,
-        fields.TH_P1_L6,
-        fields.TH_P1_L7,
-        fields.TH_P1_L8,
-        fields.TH_P1_L9,
-        fields.TH_P1_L10,
-        fields.TH_P1_L11,
-        fields.TH_P1_L12
-    };
+           fields.TH_P1_L1,
+           fields.TH_P1_L2,
+           fields.TH_P1_L3,
+           fields.TH_P1_L4,
+           fields.TH_P1_L5,
+           fields.TH_P1_L6,
+           fields.TH_P1_L7,
+           fields.TH_P1_L8,
+           fields.TH_P1_L9,
+           fields.TH_P1_L10,
+           fields.TH_P1_L11,
+           fields.TH_P1_L12
+       };
 
-            float totalTime = T.Sum();
+            const float totalTimeUs = 8200f;   // fondo scala fisso
 
-            if (totalTime <= 0)
-                totalTime = 1;
-
-            float currentTime = 0;
+            float currentTimeUs = 0f;
 
             for (int i = 0; i < 12; i++)
             {
-                float x1 = area.Left + (currentTime / totalTime) * area.Width;
+
+                // Tempo del segmento in microsecondi
+
+                float segmentTimeUs = T[i] * 100f + 100f;
+
+                // X1 = tempo attuale scalato
+
+                float x1 = area.Left + (currentTimeUs / totalTimeUs) * area.Width;
+
+                // Calcolo Y come nel tuo codice
 
                 float maxValue = (i < 8) ? 31f : 255f;
 
-                float y = area.Bottom - (L[i] * area.Height / maxValue);
+                float y = area.Bottom - (L[i] * area.Height / maxValue); // /maxValue
+
+
+                // CLIPPING X1
+
+                if (x1 > area.Right)
+                {
+                    if (pts.Count > 0)
+                    {
+                        PointF prev = pts[pts.Count - 1];
+
+                        float clippedY = prev.Y + (y - prev.Y) * ((area.Right - prev.X) / (x1 - prev.X));
+
+                        pts.Add(new PointF(area.Right, clippedY));
+                    }
+                    break;
+                }
 
                 pts.Add(new PointF(x1, y));
 
-                currentTime += T[i];
 
-                float x2 = area.Left + (currentTime / totalTime) * area.Width;
+                // Aggiorno il tempo per il punto successivo
 
+                currentTimeUs += segmentTimeUs;
+
+                // X2 = tempo aggiornato scalato
+
+                float x2 = area.Left + (currentTimeUs / totalTimeUs) * area.Width;
+
+                // CLIPPING X2
+
+                if (x2 > area.Right)
+                {
+                    PointF prev = pts[pts.Count - 1];
+                    float clippedY = prev.Y + (y - prev.Y) * ((area.Right - prev.X) / (x2 - prev.X));
+                    pts.Add(new PointF(area.Right, clippedY));
+                    break;
+                }
                 pts.Add(new PointF(x2, y));
             }
-
             return pts;
         }
 
-        private float GetAfeGainDb()
-        {
-            switch (fields.AFE_GAIN_RNG)
-            {
-                case 0: return 32f;
-                case 1: return 38f;
-                case 2: return 44f;
-                case 3: return 50f;
-                default: return 32f;
-            }
-        }
+
+
 
         private List<PointF> BuildTVGCurve(Rectangle area)
         {
             List<PointF> pts = new List<PointF>();
 
-            int[] T =
+            // Conversione registro -> tempo (µs)
+            float[] tvgTimeUs =
             {
-        fields.TVG_T0,
-        fields.TVG_T1,
-        fields.TVG_T2,
-        fields.TVG_T3,
-        fields.TVG_T4,
-        fields.TVG_T5
+        100,
+        200,
+        300,
+        400,
+        600,
+        800,
+        1000,
+        1200,
+        1400,
+        2000,
+        2400,
+        3200,
+        4000,
+        5200,
+        6400,
+        8000
     };
 
+            // Durata totale del record (µs)
+            float recordTimeUs = 4096f * (fields.P1_REC + 1);
+
+            // Guadagni
             int[] G =
             {
         fields.TVG_G1,
@@ -1942,40 +2269,72 @@ namespace FormCollaudoPGA460
         fields.TVG_G5
     };
 
-            float totalTime = T.Sum();
+            // Tempi convertiti
+            float[] T =
+            {
+        tvgTimeUs[fields.TVG_T0],
+        tvgTimeUs[fields.TVG_T1],
+        tvgTimeUs[fields.TVG_T2],
+        tvgTimeUs[fields.TVG_T3],
+        tvgTimeUs[fields.TVG_T4],
+        tvgTimeUs[fields.TVG_T5]
+    };
 
-            if (totalTime <= 0)
-                totalTime = 1;
+            // Tempo assoluto del primo punto
+            float currentTime = T[0];
 
-            float currentTime = 0;
+            // Gain iniziale
+            float initGain = fields.GAIN_INIT * 0.5f;
 
-            float afeGainDb = GetAfeGainDb();
+            const float maxGain = 32.0f;
 
-            const float maxGainDb = 82f;
+            // Punto iniziale (tempo = 0)
+            float x0 = area.Left;
+            float y0 = area.Bottom - (fields.GAIN_INIT * area.Height / maxGain);
+
+            pts.Add(new PointF(x0, y0));
+
+            // Punto a TVG_T0 (stesso gain iniziale)
+            float xStart = area.Left + (currentTime / recordTimeUs) * area.Width;
+
+            pts.Add(new PointF(xStart, y0));
+
+
+            //-------------------------
+            // TVG_G1 ... TVG_G5
+            //-------------------------
 
             for (int i = 0; i < G.Length; i++)
             {
-
-                float gainDb = 0.5f * (G[i] + 1) + afeGainDb;
-
-                float x1 = area.Left + (currentTime / totalTime) * area.Width;
-
-                //float y =area.Bottom -((G[i] * 240f / 63f) *area.Height / 240f);
-                float y = area.Bottom - (gainDb * area.Height / maxGainDb);
-
-                //float y = area.Bottom - (G[i] * area.Height / 63f);
-
-                pts.Add(new PointF(x1, y));
-
-                if (i < T.Length)
+                if (i > 0)
                     currentTime += T[i];
 
-                float x2 = area.Left + (currentTime / totalTime) * area.Width;
+                if (currentTime > recordTimeUs)
+                    currentTime = recordTimeUs;
 
-                pts.Add(new PointF(x2, y));
+                float x = area.Left + (currentTime / recordTimeUs) * area.Width;
+
+                float y = area.Bottom - (G[i] * area.Height / maxGain);
+
+                pts.Add(new PointF(x, y));
+
+                if (currentTime >= recordTimeUs)
+                    break;
+            }
+
+            //-------------------------
+            // Ultimo tratto orizzontale
+            //-------------------------
+
+            if (pts.Count > 0)
+            {
+                PointF last = pts[pts.Count - 1];
+
+                pts.Add(new PointF(area.Right, last.Y));
             }
 
             return pts;
-        }
+
+    }
     }
 }
