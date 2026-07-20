@@ -37,6 +37,7 @@ namespace FormCollaudoPGA460
         private List<PointF> cachedGainPts = null;
         private byte[] lastEchoDump = new byte[128];
         private bool forceRegisterWrite = false;
+        private byte currentUartAddress = 0;
 
         private void LoadDefaultRegisters()
         {
@@ -553,14 +554,12 @@ namespace FormCollaudoPGA460
 
                 panelTrigger.BorderStyle = BorderStyle.FixedSingle;
 
-                // btnScanMisure non è più usato singolarmente: il pulsante unico
-                // btnScanGrafico ("Attiva Scan") alterna ciclicamente grafico/misure.
+
                 btnScanGrafico.Click += btnScanGrafico_Click;
 
                 scanTimer.Interval = 1000;
 
                 btnReadConfig.Click += btnReadConfig_Click;
-                btnWriteConfig.Click += btnWriteConfig_Click;
 
                 btnSaveConfigFile.Click += btnSaveConfigFile_Click;
                 btnLoadConfigFile.Click += btnLoadConfigFile_Click;
@@ -593,6 +592,8 @@ namespace FormCollaudoPGA460
                 misura_to_result.Elapsed += misura_to_result_Elapsed;
 
                 dgvFields.CellEndEdit += dgvFields_CellEndEdit;
+
+                txtIndirizzo.TextChanged += txtIndirizzo_TextChanged;
 
             }
             catch (Exception ex)
@@ -725,14 +726,16 @@ namespace FormCollaudoPGA460
         {
             burst_to_dump.Enabled = false;
 
-            byte[] d = { 0x07 };
+            byte cmd = BuildCommand(0x07);
+
+            byte[] d = { cmd };
 
             byte cs = CalcChecksum(d);
 
             byte[] frame =
             {
         0x55,
-        0x07,
+        cmd,
         cs
     };
 
@@ -798,7 +801,6 @@ namespace FormCollaudoPGA460
         }
 
         private void burst_decoding_Elapsed(object sender, ElapsedEventArgs e)
-
         {
             if (!scanEnabled)
                 return;
@@ -888,6 +890,27 @@ namespace FormCollaudoPGA460
                 cmbCom.SelectedIndex = 0;
         }
 
+        private byte DetectUartAddress()
+        {
+            for (byte addr = 0; addr <= 7; addr++)
+            {
+                currentUartAddress = addr;
+
+                try
+                {
+                    ReadRegister(0x1F);
+                    Debug.WriteLine($"[DetectUartAddress] dispositivo trovato all'indirizzo {addr}");
+                    return addr;
+                }
+                catch (Exception)
+                {
+                    // Nessuna risposta a questo indirizzo: provo il successivo.
+                }
+            }
+            currentUartAddress = 0;
+            throw new Exception("Nessun PGA460 ha risposto (indirizzi 0-7). Verificare cablaggio/alimentazione.");
+        }
+
         private void btnConnect_Click(object sender, EventArgs e)
         {
             try
@@ -904,6 +927,9 @@ namespace FormCollaudoPGA460
                 serial.WriteTimeout = 500;
 
                 serial.Open();
+
+                byte detectedAddress = DetectUartAddress();
+                txtIndirizzo.Text = detectedAddress.ToString();
 
                 LoadDefaultRegisters();
 
@@ -966,26 +992,6 @@ namespace FormCollaudoPGA460
 
             if (lastEchoDump != null)
                 DrawDump(lastEchoDump);
-        }
-
-        private void btnWriteConfig_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                WriteConfiguration();
-
-                if (offlineMode)
-                    VirtualRegistersToGrid();
-
-                MessageBox.Show(
-                    offlineMode ?
-                    "Encode completato" :
-                    "Configurazione scritta nel PGA460");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message);
-            }
         }
 
         private void dgvFields_CellEndEdit(object sender, DataGridViewCellEventArgs e)
@@ -1104,7 +1110,6 @@ namespace FormCollaudoPGA460
             lock (serialLock)
             {
                 serial.DiscardInBuffer();
-                //serial.DiscardOutBuffer();
 
                 serial.Write(frame, 0, frame.Length);
 
@@ -1213,8 +1218,8 @@ namespace FormCollaudoPGA460
         {
             dgvFields = new DataGridView();
 
-            dgvFields.Location = new Point(599, 15);
-            dgvFields.Size = new Size(729, 265);
+            dgvFields.Location = new Point(599, 25);
+            dgvFields.Size = new Size(729, 255);
             dgvFields.AllowUserToAddRows = false;
             dgvFields.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
 
@@ -1538,6 +1543,25 @@ namespace FormCollaudoPGA460
             }
         }
 
+        private void WriteUartAddress(byte address)
+        {
+            if (address > 7)
+                throw new Exception("L'indirizzo UART deve essere compreso tra 0 e 7.");
+
+            byte reg = ReadRegister(0x1F);
+
+            // mantiene PULSE_P2 (bit 4:0)
+            reg = (byte)((reg & 0x1F) | (address << 5));
+
+            WriteRegister(0x1F, reg);
+        }
+
+        private byte ReadUartAddress()
+        {
+            byte reg = ReadRegister(0x1F);
+
+            return (byte)((reg >> 5) & 0x07);
+        }
 
         private void btnScrivi_Click(object sender, EventArgs e)
         {
@@ -1549,18 +1573,21 @@ namespace FormCollaudoPGA460
 
             try
             {
-                byte addr = Convert.ToByte(txtIndirizzo.Text, 16);
-                byte val = Convert.ToByte(txtValore.Text, 16);
+                byte address = Convert.ToByte(txtIndirizzo.Text);
 
-                byte[] frame = BuildWrite(addr, val);
+                WriteUartAddress(address);
 
-                serial.Write(frame, 0, frame.Length);
+                // Scrittura riuscita: da ora in poi i comandi devono usare il nuovo indirizzo.
+                currentUartAddress = address;
 
-                MessageBox.Show($"Registro 0x{addr:X2} scritto con successo.");
+                fields.UART_ADDR = address;
+                UpdateFieldsGrid();
+
+                MessageBox.Show($"UART_ADDR scritto = {address}");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Errore SCRIVI: " + ex.Message);
+                MessageBox.Show(ex.Message);
             }
         }
 
@@ -1574,43 +1601,13 @@ namespace FormCollaudoPGA460
 
             try
             {
-                byte addr = Convert.ToByte(txtIndirizzo.Text, 16);
+                byte address = ReadUartAddress();
 
-                byte[] frame = BuildRead(addr);
-
-               
-
-                lock (serialLock)
-                {
-                    serial.DiscardInBuffer();
-
-                    serial.Write(frame, 0, frame.Length);
-
-                    Stopwatch sw = Stopwatch.StartNew();
-
-                    while (serial.BytesToRead < 3)
-                    {
-                        if (sw.ElapsedMilliseconds > 100)
-                        {
-                            MessageBox.Show("Timeout risposta PGA460");
-                            return;
-                        }
-
-                        Thread.Sleep(1);
-                    }
-
-                    byte[] rx = new byte[3];
-
-                    serial.Read(rx, 0, 3);
-
-                    MessageBox.Show($"Registro 0x{addr:X2} letto con valore 0x{rx[1]:X2}");
-
-                    txtValore.Text = rx[1].ToString("X2");
-                }
+                MessageBox.Show($"UART_ADDR = {address}");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Errore LEGGI: " + ex.Message);
+                MessageBox.Show(ex.Message);
             }
         }
 
@@ -1701,6 +1698,10 @@ namespace FormCollaudoPGA460
                 sw.WriteLine($"Distance={txtDistance.Text}");
                 sw.WriteLine($"Width={txtWidth.Text}");
                 sw.WriteLine($"Amplitude={txtAmplitude.Text}");
+
+                sw.WriteLine();
+                sw.WriteLine("[Address]");
+                sw.WriteLine($"UartAddress={txtIndirizzo.Text}");
             }
         }
 
@@ -1709,6 +1710,7 @@ namespace FormCollaudoPGA460
             var registers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             //var fieldsValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var measure = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var address = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             string section = "";
 
@@ -1747,6 +1749,9 @@ namespace FormCollaudoPGA460
                         break;*/
                     case "Measure":
                         measure[key] = value;
+                        break;
+                    case "Address":
+                        address[key] = value;
                         break;
                 }
             }
@@ -1789,20 +1794,81 @@ namespace FormCollaudoPGA460
 
         }
 
-        private byte[] BuildRead(byte addr)
+        private byte GetUartAddress()
         {
-            byte[] d = { 0x09, addr };
-            byte cs = CalcChecksum(d);
-
-            return new byte[] { 0x55, 0x09, addr, cs };
+            // Indirizzo attualmente valido per parlare col PGA460 (aggiornato solo dopo
+            // una scrittura riuscita in WriteUartAddress). NON legge txtIndirizzo qui:
+            // quel campo è per il nuovo indirizzo da programmare, non per quello corrente.
+            return currentUartAddress;
         }
 
-        private byte[] BuildWrite(byte addr, byte val)
+        private bool IndirizzoCorrisponde()
         {
-            byte[] d = { 0x0A, addr, val };
+            if (!byte.TryParse(txtIndirizzo.Text, out byte addr))
+                return false;
+
+            return addr == currentUartAddress;
+        }
+
+        private void txtIndirizzo_TextChanged(object sender, EventArgs e)
+        {
+            if (combinedScanEnabled && !IndirizzoCorrisponde())
+            {
+                Debug.WriteLine("[txtIndirizzo_TextChanged] indirizzo cambiato durante lo scan, fermo tutto.");
+                StopCombinedScan();
+            }
+        }
+
+        private byte BuildCommand(byte cmd)
+        {
+
+            byte uartAddress = GetUartAddress();
+
+            return (byte)((cmd & 0x1F) | ((uartAddress & 0x07) << 5));
+        }
+
+        private byte[] BuildRead(byte reg)
+        {
+            byte cmd = BuildCommand(0x09);
+
+            byte[] d =
+            {
+        cmd,
+        reg
+    };
+
             byte cs = CalcChecksum(d);
 
-            return new byte[] { 0x55, 0x0A, addr, val, cs };
+            return new byte[]
+            {
+        0x55,
+        cmd,
+        reg,
+        cs
+            };
+        }
+
+        private byte[] BuildWrite(byte reg, byte value)
+        {
+            byte cmd = BuildCommand(0x0A);
+
+            byte[] d =
+            {
+        cmd,
+        reg,
+        value
+    };
+
+            byte cs = CalcChecksum(d);
+
+            return new byte[]
+            {
+        0x55,
+        cmd,
+        reg,
+        value,
+        cs
+            };
         }
 
 
@@ -1888,6 +1954,15 @@ namespace FormCollaudoPGA460
                 return;
             }
 
+            if (!IndirizzoCorrisponde())
+            {
+                MessageBox.Show(
+                    $"L'indirizzo digitato ({txtIndirizzo.Text}) non corrisponde a quello attualmente " +
+                    $"in uso col dispositivo ({currentUartAddress}). Correggi l'indirizzo oppure premi " +
+                    "\"Trasmetti a PGA\" per programmarlo sul PGA460 prima di avviare lo scan.");
+                return;
+            }
+
             combinedScanEnabled = true;
 
             burst_interval.Interval = SCAN_PHASE_INTERVAL_MS;
@@ -1917,16 +1992,18 @@ namespace FormCollaudoPGA460
 
             byte objectsToDetect = 1;
 
+            byte cmd = BuildCommand(0x00);
+
             byte[] d =
             {
-        0x00,objectsToDetect
+        cmd,objectsToDetect
     };
 
             byte cs = CalcChecksum(d);
 
             byte[] frame =
             {
-        0x55,0x00,objectsToDetect,cs
+        0x55,cmd,objectsToDetect,cs
     };
             lock (serialLock)
             {
@@ -1938,16 +2015,18 @@ namespace FormCollaudoPGA460
 
         private byte[] ReadMeasurement()
         {
+            byte cmd = BuildCommand(0x05);
+
             byte[] d =
             {
-        0x05
+        cmd
     };
 
             byte cs = CalcChecksum(d);
 
             byte[] frame =
             {
-        0x55, 0x05, cs
+        0x55, cmd, cs
     };
 
             lock (serialLock)
