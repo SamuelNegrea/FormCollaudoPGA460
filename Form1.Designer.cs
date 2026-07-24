@@ -34,9 +34,8 @@
             btnLeggi = new System.Windows.Forms.Button();
             labelIndirizzo = new System.Windows.Forms.Label();
             cmbCom = new System.Windows.Forms.ComboBox();
-            btnConnect = new System.Windows.Forms.Button();
             btnReadAll = new System.Windows.Forms.Button();
-            btnReadEEPROM = new System.Windows.Forms.Button();
+            btnWriteEEPROM = new System.Windows.Forms.Button();
             dgvRegisters = new System.Windows.Forms.DataGridView();
             txtDistance = new System.Windows.Forms.TextBox();
             txtWidth = new System.Windows.Forms.TextBox();
@@ -115,15 +114,6 @@
             cmbCom.Size = new System.Drawing.Size(121, 23);
             cmbCom.TabIndex = 6;
             // 
-            // btnConnect
-            // 
-            btnConnect.Location = new System.Drawing.Point(356, 49);
-            btnConnect.Name = "btnConnect";
-            btnConnect.Size = new System.Drawing.Size(75, 31);
-            btnConnect.TabIndex = 7;
-            btnConnect.Text = "Connetti";
-            btnConnect.UseVisualStyleBackColor = true;
-            // 
             // btnReadAll
             // 
             btnReadAll.Location = new System.Drawing.Point(124, 212);
@@ -134,14 +124,14 @@
             btnReadAll.UseVisualStyleBackColor = true;
             btnReadAll.Click += btnReadAll_Click;
             // 
-            // btnReadEEPROM
+            // btnWriteEEPROM
             // 
-            btnReadEEPROM.Location = new System.Drawing.Point(319, 212);
-            btnReadEEPROM.Name = "btnReadEEPROM";
-            btnReadEEPROM.Size = new System.Drawing.Size(166, 32);
-            btnReadEEPROM.TabIndex = 9;
-            btnReadEEPROM.Text = "scrivi EEPROM";
-            btnReadEEPROM.UseVisualStyleBackColor = true;
+            btnWriteEEPROM.Location = new System.Drawing.Point(319, 212);
+            btnWriteEEPROM.Name = "btnWriteEEPROM";
+            btnWriteEEPROM.Size = new System.Drawing.Size(166, 32);
+            btnWriteEEPROM.TabIndex = 9;
+            btnWriteEEPROM.Text = "scrivi EEPROM";
+            btnWriteEEPROM.UseVisualStyleBackColor = true;
             // 
             // dgvRegisters
             // 
@@ -394,9 +384,8 @@
             Controls.Add(txtWidth);
             Controls.Add(txtDistance);
             Controls.Add(dgvRegisters);
-            Controls.Add(btnReadEEPROM);
+            Controls.Add(btnWriteEEPROM);
             Controls.Add(btnReadAll);
-            Controls.Add(btnConnect);
             Controls.Add(cmbCom);
             Controls.Add(labelIndirizzo);
             Controls.Add(btnLeggi);
@@ -439,11 +428,6 @@
         private System.Windows.Forms.ComboBox cmbCom;
 
         /// <summary>
-        /// Defines the btnConnect
-        /// </summary>
-        private System.Windows.Forms.Button btnConnect;
-
-        /// <summary>
         /// Defines the btnReadAll
         /// </summary>
         private System.Windows.Forms.Button btnReadAll;
@@ -451,7 +435,7 @@
         /// <summary>
         /// Defines the btnReadEEPROM
         /// </summary>
-        private System.Windows.Forms.Button btnReadEEPROM;
+        private System.Windows.Forms.Button btnWriteEEPROM;
 
         /// <summary>
         /// Defines the dgvRegisters

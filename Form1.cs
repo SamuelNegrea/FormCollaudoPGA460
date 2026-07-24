@@ -38,6 +38,7 @@ namespace FormCollaudoPGA460
         private byte[] lastEchoDump = new byte[128];
         private bool forceRegisterWrite = false;
         private byte currentUartAddress = 0;
+        private bool eepromWriteInProgress = false;
 
         private void LoadDefaultRegisters()
         {
@@ -540,20 +541,23 @@ namespace FormCollaudoPGA460
 
                 LoadComPorts();
 
-                btnConnect.Click += btnConnect_Click;
-
+                cmbCom.SelectedIndexChanged += cmbCom_SelectedIndexChanged;
 
                 InitGrid();
                 LoadRegisters();
 
                 InitFieldsGrid();
+
+                offlineMode = true;
+                LoadDefaultRegisters();
+                DecodeRegisters14To6E();
+
                 VirtualRegistersToGrid();
                 UpdateFieldsGrid();
 
                 panelTrigger.BackColor = Color.LightGray;
 
                 panelTrigger.BorderStyle = BorderStyle.FixedSingle;
-
 
                 btnScanGrafico.Click += btnScanGrafico_Click;
 
@@ -569,8 +573,6 @@ namespace FormCollaudoPGA460
                 burst_to_dump.AutoReset = false;       // ripete automaticamente
 
                 burst_to_dump.Elapsed += burst_to_dump_Elapsed;   // handler dell’evento
-
-
 
                 burst_decoding = new System.Timers.Timer(200);
 
@@ -594,6 +596,8 @@ namespace FormCollaudoPGA460
                 dgvFields.CellEndEdit += dgvFields_CellEndEdit;
 
                 txtIndirizzo.TextChanged += txtIndirizzo_TextChanged;
+
+                btnWriteEEPROM.Click += btnWriteEEPROM_Click;
 
             }
             catch (Exception ex)
@@ -911,8 +915,16 @@ namespace FormCollaudoPGA460
             throw new Exception("Nessun PGA460 ha risposto (indirizzi 0-7). Verificare cablaggio/alimentazione.");
         }
 
-        private void btnConnect_Click(object sender, EventArgs e)
+        private void cmbCom_SelectedIndexChanged(object sender, EventArgs e)
         {
+            ConnettiPortaSelezionata();
+        }
+
+        private void ConnettiPortaSelezionata()
+        {
+            if (string.IsNullOrEmpty(cmbCom.Text))
+                return;
+
             try
             {
                 if (serial != null &&
@@ -928,24 +940,33 @@ namespace FormCollaudoPGA460
 
                 serial.Open();
 
+                // Rilevo l'indirizzo UART del PGA460 collegato: serve comunicare
+                // realmente con il dispositivo, quindi esco temporaneamente
+                // dalla modalità "solo area dati PC".
+                offlineMode = false;
+
                 byte detectedAddress = DetectUartAddress();
+                currentUartAddress = detectedAddress;
+                
+
+
                 txtIndirizzo.Text = detectedAddress.ToString();
 
-                LoadDefaultRegisters();
-
-
-                bool prevOfflineMode = offlineMode;
-                offlineMode = true;
-                DecodeRegisters14To6E();
-                offlineMode = prevOfflineMode;
-
-                UpdateFieldsGrid();
-                refreshGraph = true;
+                // NOTA: la connessione NON ricarica i dati di default e non
+                // trasmette/legge automaticamente i registri: l'area dati PC
+                // resta quella corrente (di default all'avvio, da file se
+                // caricata, o modificata dall'utente) finché non si usa
+                // esplicitamente "Trasmetti a PGA" o "Leggi da PGA".
 
                 MessageBox.Show($"Connesso a {cmbCom.Text}");
             }
             catch (Exception ex)
             {
+                offlineMode = true;
+
+                if (serial != null && serial.IsOpen)
+                    serial.Close();
+
                 MessageBox.Show("Errore connessione:\n" + ex.Message);
             }
         }
@@ -1150,8 +1171,8 @@ namespace FormCollaudoPGA460
                 return;
             }
 
-            /*if (serial == null || !serial.IsOpen)
-                throw new Exception("Connettere prima la porta COM");*/
+            if (serial == null || !serial.IsOpen)
+                throw new Exception("Connettere prima la porta COM");
 
             if (!force && !forceRegisterWrite)
             {
@@ -1520,14 +1541,26 @@ namespace FormCollaudoPGA460
         {
             try
             {
-                foreach (
-                    DataGridViewRow row in dgvRegisters.Rows)
+            bool connected = serial != null && serial.IsOpen;
+            bool prevOfflineModeRead = offlineMode;
+
+            if (connected)
+                offlineMode = false;
+                try
                 {
-                    byte addr = Convert.ToByte(row.Cells[0].Value.ToString(), 16);
+                    foreach (
+                        DataGridViewRow row in dgvRegisters.Rows)
+                    {
+                        byte addr = Convert.ToByte(row.Cells[0].Value.ToString(), 16);
 
-                    byte value = ReadRegister(addr);
+                        byte value = ReadRegister(addr);
 
-                    row.Cells[2].Value = value.ToString("X2");
+                        row.Cells[2].Value = value.ToString("X2");
+                    }
+                }
+                finally
+                {
+                    offlineMode = prevOfflineModeRead;
                 }
 
                 bool prevOfflineMode = offlineMode;
@@ -1556,13 +1589,6 @@ namespace FormCollaudoPGA460
             WriteRegister(0x1F, reg);
         }
 
-        private byte ReadUartAddress()
-        {
-            byte reg = ReadRegister(0x1F);
-
-            return (byte)((reg >> 5) & 0x07);
-        }
-
         private void btnScrivi_Click(object sender, EventArgs e)
         {
             if (serial == null || !serial.IsOpen)
@@ -1571,23 +1597,37 @@ namespace FormCollaudoPGA460
                 return;
             }
 
+            bool prevOfflineMode = offlineMode;
+
             try
             {
-                byte address = Convert.ToByte(txtIndirizzo.Text);
+                offlineMode = false;
 
-                WriteUartAddress(address);
+                foreach (DataGridViewRow row in dgvRegisters.Rows)
+                {
+                    byte addr = Convert.ToByte(row.Cells[0].Value.ToString(), 16);
+                    byte value = virtualRegs[addr];
 
-                // Scrittura riuscita: da ora in poi i comandi devono usare il nuovo indirizzo.
-                currentUartAddress = address;
+                    WriteRegister(addr, value, force: true);
+                }
 
-                fields.UART_ADDR = address;
-                UpdateFieldsGrid();
+                // L'indirizzo UART effettivamente in uso è quello appena
+                // trasmesso (registro 0x1F, bit 7:5).
+                currentUartAddress = (byte)((virtualRegs[0x1F] >> 5) & 0x07);
 
-                MessageBox.Show($"UART_ADDR scritto = {address}");
+                MessageBox.Show("Dati dell'area PC trasmessi al PGA460.");
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                offlineMode = prevOfflineMode;
+
+                fields.UART_ADDR = currentUartAddress;
+                txtIndirizzo.Text = currentUartAddress.ToString();
+                UpdateFieldsGrid();
             }
         }
 
@@ -1599,15 +1639,182 @@ namespace FormCollaudoPGA460
                 return;
             }
 
+            bool prevOfflineMode = offlineMode;
+
             try
             {
-                byte address = ReadUartAddress();
+                offlineMode = false;
 
-                MessageBox.Show($"UART_ADDR = {address}");
+                foreach (DataGridViewRow row in dgvRegisters.Rows)
+                {
+                    byte addr = Convert.ToByte(row.Cells[0].Value.ToString(), 16);
+                    byte value = ReadRegister(addr);
+
+                    row.Cells[2].Value = value.ToString("X2");
+                }
+
+                currentUartAddress = (byte)((virtualRegs[0x1F] >> 5) & 0x07);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+                return;
+            }
+            finally
+            {
+                offlineMode = prevOfflineMode;
+            }
+
+            try
+            {
+                // Decodifica nei campi i registri appena caricati nell'area dati PC.
+                DecodeRegisters14To6E();
+                UpdateFieldsGrid();
+
+                fields.UART_ADDR = currentUartAddress;
+                txtIndirizzo.Text = currentUartAddress.ToString();
+
+                refreshGraph = true;
+
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
+
+                MessageBox.Show("Dati letti dalla RAM del PGA460 e caricati nell'area dati PC.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+        }
+
+        private void btnWriteEEPROM_Click(object sender, EventArgs e)
+        {
+            // Guardia anti-rientranza: se per qualsiasi motivo l'evento Click arrivasse
+            // una seconda volta mentre la scrittura e' gia' in corso (es. doppio click,
+            // click in coda mentre il thread UI era bloccato nei Thread.Sleep), il
+            // secondo ingresso viene ignorato invece di rieseguire il trigger EEPROM.
+            if (eepromWriteInProgress)
+                return;
+
+            if (offlineMode && (serial == null || !serial.IsOpen))
+            {
+                MessageBox.Show("Connettere prima la porta COM");
+                return;
+            }
+
+            byte address;
+
+            try
+            {
+                address = Convert.ToByte(txtIndirizzo.Text);
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("Indirizzo UART non valido (deve essere un numero 0-7).");
+                return;
+            }
+
+            // Conferma esplicita: la programmazione EEPROM del PGA460 ha un numero di
+            // cicli di scrittura limitato, quindi non deve mai partire per un click
+            // accidentale.
+            DialogResult confirm = MessageBox.Show(
+                $"Verranno programmati in EEPROM i registri attualmente in RAM, incluso l'indirizzo UART = {address}.\n\n" +
+                "Questa operazione consuma un ciclo di scrittura dell'EEPROM del PGA460: procedere?",
+                "Conferma scrittura EEPROM",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes)
+                return;
+
+            // Da qui in poi il bottone resta disabilitato e la guardia attiva finche'
+            // l'intera sequenza (unlock -> trigger -> verifica) non e' terminata, cosi'
+            // un secondo click fisico non puo' generare un secondo trigger di scrittura.
+            eepromWriteInProgress = true;
+            btnWriteEEPROM.Enabled = false;
+
+            try
+            {
+                // 1) Scrive l'indirizzo UART digitato in txtIndirizzo nel registro RAM 0x1F,
+                //    cosi' viene incluso nella programmazione EEPROM (mantiene P2_PULSE).
+                WriteUartAddress(address);
+
+                currentUartAddress = address;
+                fields.UART_ADDR = address;
+
+                // 2) Sblocco EEPROM: EE_UNLCK = 0xD, EE_PRGM = 0, DATADUMP_EN/EE_RLOAD = 0
+                WriteRegister(0x40, 0x68, force: true);
+
+                Thread.Sleep(2);
+
+                // 3) Trigger di programmazione (UNA SOLA volta per click confermato):
+                //    EE_UNLCK = 0xD, EE_PRGM = 1
+                WriteRegister(0x40, 0x69, force: true);
+
+
+                // 3b)
+                byte reg40Debug = ReadRegister(0x40);
+
+                byte dbgUnlck = (byte)((reg40Debug >> 3) & 0x0F);
+                byte dbgPrgm = (byte)(reg40Debug & 0x01);
+                byte dbgPrgmOk = (byte)((reg40Debug >> 2) & 0x01);
+
+                Debug.WriteLine($"[btnWriteEEPROM_Click] subito dopo trigger: reg40=0x{reg40Debug:X2} " +
+                                 $"EE_UNLCK=0x{dbgUnlck:X} EE_PRGM={dbgPrgm} EE_PRGM_OK={dbgPrgmOk}");
+
+                // 4)
+
+                bool ok = false;
+                byte reg40 = 0;
+
+                System.Diagnostics.Stopwatch swProg = System.Diagnostics.Stopwatch.StartNew();
+
+                while (swProg.ElapsedMilliseconds < 2000)
+                {
+                    Thread.Sleep(20);
+
+                    reg40 = ReadRegister(0x40);
+
+                    if ((reg40 & 0x04) != 0)
+                    {
+                        ok = true;
+                        break;
+                    }
+                }
+
+                // 5) In ogni caso (successo, fallimento o timeout) si richiude il registro:
+                //    EE_UNLCK = 0 (rilocca), EE_PRGM = 0 (azzera il trigger, che non si
+                //    autoazzera da solo). Cosi' non si lascia il chip sbloccato ne' con il
+                //    trigger ancora attivo dopo l'operazione.
+                WriteRegister(0x40, 0x00, force: true);
+
+                reg40 = ReadRegister(0x40);
+
+                fields.DATADUMP_EN = (byte)((reg40 >> 7) & 0x01);
+                fields.EE_UNLCK = (byte)((reg40 >> 3) & 0x0F);
+                fields.EE_PRGM_OK = (byte)((reg40 >> 2) & 0x01);
+                fields.EE_RLOAD = (byte)((reg40 >> 1) & 0x01);
+                fields.EE_PRGM = (byte)(reg40 & 0x01);
+
+                UpdateFieldsGrid();
+
+                if (ok)
+                    MessageBox.Show($"Registri programmati in EEPROM con successo (indirizzo UART = {address}).");
+                else
+                    MessageBox.Show("Programmazione EEPROM non riuscita: EE_PRGM_OK = 0.\n" +
+                                     "Verificare cablaggio/alimentazione prima di riprovare, per non consumare cicli di scrittura inutilmente.");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[btnWriteEEPROM_Click] errore: " + ex.Message);
+                MessageBox.Show("Errore durante la scrittura EEPROM:\n" + ex.Message);
+            }
+            finally
+            {
+                // Riabilita sempre il bottone e rilascia la guardia, anche in caso di eccezione,
+                // cosi' l'utente puo' eventualmente riprovare consapevolmente.
+                eepromWriteInProgress = false;
+                btnWriteEEPROM.Enabled = true;
             }
         }
 
@@ -1948,7 +2155,7 @@ namespace FormCollaudoPGA460
                 return;
             }
 
-            if (!offlineMode && (serial == null || !serial.IsOpen))
+            if (offlineMode && (serial == null || !serial.IsOpen))
             {
                 MessageBox.Show("Connettere prima la porta COM per avviare la scansione.");
                 return;
