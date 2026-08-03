@@ -81,8 +81,25 @@ namespace FormCollaudoPGA460
             WriteRegister(0x6B, 0x80);
             WriteRegister(0x6C, 0x80);
             WriteRegister(0x6D, 0x80);
-            WriteRegister(0x6E, 0x00); 
-    }
+            WriteRegister(0x6E, 0x00);
+
+            WriteRegister(0x6F, 0x00);
+            WriteRegister(0x70, 0x00);
+            WriteRegister(0x71, 0x00);
+            WriteRegister(0x72, 0x00);
+            WriteRegister(0x73, 0x00);
+            WriteRegister(0x74, 0x00);
+            WriteRegister(0x75, 0x00);
+            WriteRegister(0x76, 0x00);
+            WriteRegister(0x77, 0x00);
+            WriteRegister(0x78, 0x00);
+            WriteRegister(0x79, 0x00);
+            WriteRegister(0x7A, 0x00);
+            WriteRegister(0x7B, 0x00);
+            WriteRegister(0x7C, 0x00);
+            WriteRegister(0x7D, 0x00);
+            WriteRegister(0x7E, 0x00);
+        }
 
         private class PGA460Fields
         {
@@ -189,7 +206,7 @@ namespace FormCollaudoPGA460
 
 
         private void DecodeRegisters14To6E()
-        {
+        { 
             DecodeTVGain();
             DecodeTVGGainValues();
             DecodeMainConfig();
@@ -514,6 +531,132 @@ namespace FormCollaudoPGA460
             WriteRegister(0x6E, (byte)((virtualRegs[0x6E] & 0xF0) | (fields.TH_P1_OFF & 0x0F)));
         }
 
+        private byte[] BuildThresholdBlockBytes()
+        {
+            byte[] data = new byte[32];
+
+            // --- P1 threshold: registri 0x5F-0x6E (16 byte) ---
+            data[0] = (byte)(((fields.TH_P1_T1 & 0x0F) << 4) | (fields.TH_P1_T2 & 0x0F));   // 0x5F
+            data[1] = (byte)(((fields.TH_P1_T3 & 0x0F) << 4) | (fields.TH_P1_T4 & 0x0F));   // 0x60
+            data[2] = (byte)(((fields.TH_P1_T5 & 0x0F) << 4) | (fields.TH_P1_T6 & 0x0F));   // 0x61
+            data[3] = (byte)(((fields.TH_P1_T7 & 0x0F) << 4) | (fields.TH_P1_T8 & 0x0F));   // 0x62
+            data[4] = (byte)(((fields.TH_P1_T9 & 0x0F) << 4) | (fields.TH_P1_T10 & 0x0F));  // 0x63
+            data[5] = (byte)(((fields.TH_P1_T11 & 0x0F) << 4) | (fields.TH_P1_T12 & 0x0F)); // 0x64
+
+            data[6] = (byte)(((fields.TH_P1_L1 & 0x1F) << 3) | ((fields.TH_P1_L2 >> 2) & 0x07));                                   // 0x65
+            data[7] = (byte)(((fields.TH_P1_L2 & 0x03) << 6) | ((fields.TH_P1_L3 & 0x1F) << 1) | ((fields.TH_P1_L4 >> 4) & 0x01)); // 0x66
+            data[8] = (byte)(((fields.TH_P1_L4 & 0x0F) << 4) | ((fields.TH_P1_L5 >> 1) & 0x0F));                                   // 0x67
+            data[9] = (byte)(((fields.TH_P1_L5 & 0x01) << 7) | ((fields.TH_P1_L6 & 0x1F) << 2) | ((fields.TH_P1_L7 >> 3) & 0x03)); // 0x68
+            data[10] = (byte)(((fields.TH_P1_L7 & 0x07) << 5) | (fields.TH_P1_L8 & 0x1F));                                          // 0x69
+
+            data[11] = fields.TH_P1_L9;   // 0x6A
+            data[12] = fields.TH_P1_L10;  // 0x6B
+            data[13] = fields.TH_P1_L11;  // 0x6C
+            data[14] = fields.TH_P1_L12;  // 0x6D
+            data[15] = (byte)((virtualRegs[0x6E] & 0xF0) | (fields.TH_P1_OFF & 0x0F)); // 0x6E
+
+            // --- P2 threshold: registri 0x6F-0x7E (16 byte) ---
+            // Non esistono campi dedicati per P2 in questo progetto: si riusano
+            // i valori correnti in cache (letti dal device o dai default).
+            for (int i = 0; i < 16; i++)
+                data[16 + i] = virtualRegs[0x6F + i];
+
+            return data;
+        }
+
+        // Costruisce il frame UART: 0x55, CMD(16), 32 byte dati, checksum.
+        // Nessun byte di indirizzo registro: il bulk write parte implicitamente
+        // dal primo registro di soglia (0x5F).
+        private byte[] BuildThresholdBulkWriteFrame(byte[] data32)
+        {
+            if (data32 == null || data32.Length != 32)
+                throw new ArgumentException("Il Threshold bulk write richiede esattamente 32 byte di dati.");
+
+            byte cmd = BuildCommand(0x10); // CMD[4:0] = 16 = Threshold bulk write
+
+            byte[] payload = new byte[1 + data32.Length];
+            payload[0] = cmd;
+            Array.Copy(data32, 0, payload, 1, data32.Length);
+
+            byte cs = CalcChecksum(payload);
+
+            byte[] frame = new byte[1 + payload.Length + 1];
+            frame[0] = 0x55;
+            Array.Copy(payload, 0, frame, 1, payload.Length);
+            frame[frame.Length - 1] = cs;
+
+            return frame;
+        }
+
+        // Esegue il Threshold bulk write vero e proprio (CMD 16).
+        private void ThresholdBulkWrite()
+        {
+            byte[] data = BuildThresholdBlockBytes();
+
+            if (offlineMode)
+            {
+                for (int i = 0; i < 32; i++)
+                {
+                    WriteVirtualRegister((byte)(0x5F + i), data[i]);
+                    virtualRegs[0x5F + i] = data[i];
+                }
+                Debug.WriteLine("[ThresholdBulkWrite] (offline) 32 byte soglie aggiornati in RAM virtuale");
+                return;
+            }
+
+            if (serial == null || !serial.IsOpen)
+                throw new Exception("Connettere prima la porta COM");
+
+            byte[] frame = BuildThresholdBulkWriteFrame(data);
+
+            lock (serialLock)
+            {
+                serial.DiscardInBuffer();
+                serial.Write(frame, 0, frame.Length);
+
+                // Il PGA460 impiega qualche ms per processare il bulk write
+                // e ricalcolare il CRC interno delle soglie.
+                Thread.Sleep(5);
+            }
+
+            // Allinea la cache RAM locale ai valori appena trasmessi
+            for (int i = 0; i < 32; i++)
+                virtualRegs[0x5F + i] = data[i];
+
+            Debug.WriteLine("[ThresholdBulkWrite] inviati 32 byte soglie via CMD 16 (bulk write)");
+        }
+
+        // Handler da agganciare a un pulsante (es. "btnWriteThreshold") nel Designer,
+        // con lo stesso pattern di: btnWriteEEPROM.Click += btnWriteEEPROM_Click;
+        //
+        //     btnWriteThreshold.Click += btnWriteThreshold_Click;
+        //
+        private void btnWriteThreshold_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                ThresholdBulkWrite();
+
+                // Rilegge il registro diagnostico 0x4C per verificare che
+                // THR_CRC_ERR (bit 2) sia effettivamente tornato a 0.
+                byte reg4C = ReadRegister(0x4C);
+                fields.THR_CRC_ERR = (byte)((reg4C >> 2) & 0x01);
+
+                UpdateFieldsGrid();
+
+                if (fields.THR_CRC_ERR == 0)
+                    MessageBox.Show("Soglie scritte con CMD 16 (bulk write). THR_CRC_ERR = 0.");
+                else
+                    MessageBox.Show("Soglie scritte, ma THR_CRC_ERR risulta ancora a 1.\n" +
+                                     "Verificare che tutti i 32 byte trasmessi (P1 + P2) siano corretti.");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[btnWriteThreshold_Click] errore: " + ex.Message);
+                MessageBox.Show("Errore durante il bulk write delle soglie:\n" + ex.Message);
+            }
+        }
+
 
         private static System.Timers.Timer burst_interval;
         private static System.Timers.Timer burst_to_dump;
@@ -598,6 +741,8 @@ namespace FormCollaudoPGA460
                 txtIndirizzo.TextChanged += txtIndirizzo_TextChanged;
 
                 btnWriteEEPROM.Click += btnWriteEEPROM_Click;
+
+                btnWriteThreshold.Click += btnWriteThreshold_Click;
 
             }
             catch (Exception ex)
@@ -1105,6 +1250,11 @@ namespace FormCollaudoPGA460
             {
                 AddRegister(a, $"P1_THR_{a - 0x5F}");
             }
+
+            for (byte a = 0x6F; a <= 0x7E; a++)
+            {
+                AddRegister(a, $"P2_THR_{a - 0x6F}");
+            }
         }
 
         private byte ReadVirtualRegister(byte addr)
@@ -1609,11 +1759,10 @@ namespace FormCollaudoPGA460
                     byte value = virtualRegs[addr];
 
                     WriteRegister(addr, value, force: true);
-                }
 
-                // L'indirizzo UART effettivamente in uso è quello appena
-                // trasmesso (registro 0x1F, bit 7:5).
-                currentUartAddress = (byte)((virtualRegs[0x1F] >> 5) & 0x07);
+                    if (addr == 0x1F)
+                        currentUartAddress = (byte)((value >> 5) & 0x07);
+                }
 
                 MessageBox.Show("Dati dell'area PC trasmessi al PGA460.");
             }

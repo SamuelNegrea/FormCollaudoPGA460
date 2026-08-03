@@ -62,6 +62,7 @@
             label4 = new System.Windows.Forms.Label();
             label5 = new System.Windows.Forms.Label();
             label6 = new System.Windows.Forms.Label();
+            btnWriteThreshold = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)dgvRegisters).BeginInit();
             ((System.ComponentModel.ISupportInitialize)pictureBoxDump).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numDistanceSet).BeginInit();
@@ -355,9 +356,19 @@
             label6.TabIndex = 38;
             label6.Text = "Campi";
             // 
+            // btnWriteThreshold
+            // 
+            btnWriteThreshold.Location = new System.Drawing.Point(319, 266);
+            btnWriteThreshold.Name = "btnWriteThreshold";
+            btnWriteThreshold.Size = new System.Drawing.Size(166, 41);
+            btnWriteThreshold.TabIndex = 39;
+            btnWriteThreshold.Text = "Scrivi Threshold";
+            btnWriteThreshold.UseVisualStyleBackColor = true;
+            // 
             // Form1
             // 
             ClientSize = new System.Drawing.Size(1384, 861);
+            Controls.Add(btnWriteThreshold);
             Controls.Add(label6);
             Controls.Add(label5);
             Controls.Add(label4);
@@ -502,5 +513,6 @@
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.Button btnWriteThreshold;
     }
 }
