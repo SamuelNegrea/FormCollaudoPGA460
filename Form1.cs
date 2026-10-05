@@ -42,63 +42,71 @@ namespace FormCollaudoPGA460
 
         private void LoadDefaultRegisters()
         {
-            WriteRegister(0x14, 0xA5);
-            WriteRegister(0x15, 0x69);
-            WriteRegister(0x16, 0xAA);
-            WriteRegister(0x17, 0x79);
-            WriteRegister(0x18, 0xE7);
-            WriteRegister(0x19, 0x9E);
-            WriteRegister(0x1A, 0x04);
-            WriteRegister(0x1B, 0x40);
-            WriteRegister(0x1C, 0x5A);
-            WriteRegister(0x1D, 0x05);
-            WriteRegister(0x1E, 0x08);
-            WriteRegister(0x1F, 0x12);
-            WriteRegister(0x20, 0x11);
-            WriteRegister(0x21, 0x7F);
-            WriteRegister(0x22, 0x1C);
-            WriteRegister(0x23, 0x00);
-            WriteRegister(0x24, 0xEE);
-            WriteRegister(0x25, 0x7C);
-            WriteRegister(0x26, 0x0A);
+            virtualRegs[0x14] = 0xA5;
+            virtualRegs[0x15] = 0x69;
+            virtualRegs[0x16] = 0xAA;
+            virtualRegs[0x17] = 0x79;
+            virtualRegs[0x18] = 0xE7;
+            virtualRegs[0x19] = 0x9E;
+            virtualRegs[0x1A] = 0x04;
+            virtualRegs[0x1B] = 0x40;
+            virtualRegs[0x1C] = 0x5A;
+            virtualRegs[0x1D] = 0x05;
+            virtualRegs[0x1E] = 0x08;
+            virtualRegs[0x1F] = 0x12;
+            virtualRegs[0x20] = 0x11;
+            virtualRegs[0x21] = 0x7F;
+            virtualRegs[0x22] = 0x1C;
+            virtualRegs[0x23] = 0x00;
+            virtualRegs[0x24] = 0xEE;
+            virtualRegs[0x25] = 0x7C;
+            virtualRegs[0x26] = 0x0A;
 
-            WriteRegister(0x29, 0x09);
+            virtualRegs[0x27] = 0x00;
+            virtualRegs[0x28] = 0x00;
+            virtualRegs[0x29] = 0x09;
+            virtualRegs[0x2A] = 0x00;
+            virtualRegs[0x2B] = 0x00;
 
-            WriteRegister(0x5F, 0xAF);
-            WriteRegister(0x60, 0xC8);
-            WriteRegister(0x61, 0x88);
-            WriteRegister(0x62, 0x88);
-            WriteRegister(0x63, 0x88);
-            WriteRegister(0x64, 0x88);
+            virtualRegs[0x40] = 0x00;
 
-            WriteRegister(0x65, 0x84);
-            WriteRegister(0x66, 0x21);
-            WriteRegister(0x67, 0x08);
-            WriteRegister(0x68, 0x42);
-            WriteRegister(0x69, 0x10);
+            virtualRegs[0x41] = 0x84; // BPF_A2_MSB
+            virtualRegs[0x42] = 0x05; // BPF_A2_LSB
+            virtualRegs[0x43] = 0xF9; // BPF_A3_MSB
+            virtualRegs[0x44] = 0x5B; // BPF_A3_LSB
+            virtualRegs[0x45] = 0x03; // BPF_B1_MSB
+            virtualRegs[0x46] = 0x2D; // BPF_B1_LSB
+            virtualRegs[0x47] = 0x7E; // LPF_A2_MSB
+            virtualRegs[0x48] = 0x67; // LPF_A2_LSB
+            virtualRegs[0x49] = 0x00; // LPF_B1_MSB
+            virtualRegs[0x4A] = 0xCD; // LPF_B1_LSB
+            virtualRegs[0x4B] = 0x00; // TEST_MUX
 
-            WriteRegister(0x6A, 0x80);
-            WriteRegister(0x6B, 0x80);
-            WriteRegister(0x6C, 0x80);
-            WriteRegister(0x6D, 0x80);
-            WriteRegister(0x6E, 0x00);
+            virtualRegs[0x5F] = 0xAF;
+            virtualRegs[0x60] = 0xC8;
+            virtualRegs[0x61] = 0x88;
+            virtualRegs[0x62] = 0x88;
+            virtualRegs[0x63] = 0x88;
+            virtualRegs[0x64] = 0x88;
 
-            WriteRegister(0x6F, 0x00);
-            WriteRegister(0x70, 0x00);
-            WriteRegister(0x71, 0x00);
-            WriteRegister(0x72, 0x00);
-            WriteRegister(0x73, 0x00);
-            WriteRegister(0x74, 0x00);
-            WriteRegister(0x75, 0x00);
-            WriteRegister(0x76, 0x00);
-            WriteRegister(0x77, 0x00);
-            WriteRegister(0x78, 0x00);
-            WriteRegister(0x79, 0x00);
-            WriteRegister(0x7A, 0x00);
-            WriteRegister(0x7B, 0x00);
-            WriteRegister(0x7C, 0x00);
-            WriteRegister(0x7D, 0x00);
-            WriteRegister(0x7E, 0x00);
+            virtualRegs[0x65] = 0x84;
+            virtualRegs[0x66] = 0x21;
+            virtualRegs[0x67] = 0x08;
+            virtualRegs[0x68] = 0x42;
+            virtualRegs[0x69] = 0x10;
+
+            virtualRegs[0x6A] = 0x80;
+            virtualRegs[0x6B] = 0x80;
+            virtualRegs[0x6C] = 0x80;
+            virtualRegs[0x6D] = 0x80;
+            virtualRegs[0x6E] = 0x00;
+
+            for (byte a = 0x6F; a <= 0x7E; a++)
+            {
+                virtualRegs[a] = virtualRegs[a - 0x10];
+            }
+
+            currentUartAddress = (byte)((virtualRegs[0x1F] >> 5) & 0x07);
         }
 
         private class PGA460Fields
@@ -272,7 +280,7 @@ namespace FormCollaudoPGA460
             WriteRegister(0x19, (byte)(((fields.TVG_G3 & 0x03) << 6) | (fields.TVG_G4 & 0x3F)));
 
             byte reg1A = (byte)(
-                (ReadRegister(0x1A) & 0x02) |
+                (virtualRegs[0x1A] & 0x02) |
                 ((fields.TVG_G5 & 0x3F) << 2) |
                 (fields.FREQ_SHIFT & 0x01));
 
@@ -363,6 +371,9 @@ namespace FormCollaudoPGA460
             WriteRegister(0x1D, (byte)(((fields.THR_CMP_DEGLTCH & 0x0F) << 4) | (fields.PULSE_DT & 0x0F)));
             WriteRegister(0x1E, (byte)(((fields.IO_IF_SEL & 0x01) << 7) | ((fields.UART_DIAG & 0x01) << 6) | ((fields.IO_DIS & 0x01) << 5) | (fields.P1_PULSE & 0x1F)));
             WriteRegister(0x1F, (byte)(((fields.UART_ADDR & 0x07) << 5) | (fields.P2_PULSE & 0x1F)));
+            currentUartAddress = (byte)(fields.UART_ADDR & 0x07);
+            if (txtIndirizzo != null && !txtIndirizzo.IsDisposed)
+                txtIndirizzo.Text = currentUartAddress.ToString();
 
             byte reg20 = (byte)((virtualRegs[0x20] & 0x40) | ((fields.DIS_CL & 0x01) << 7) | (fields.CURR_LIM1 & 0x3F));
             WriteRegister(0x20, reg20);
@@ -424,6 +435,38 @@ namespace FormCollaudoPGA460
 
         private void EncodeFilterConfig()
         {
+            if (fields.BPF_A2_MSB == 0 && fields.BPF_A2_LSB == 0 &&
+                fields.BPF_A3_MSB == 0 && fields.BPF_A3_LSB == 0 &&
+                fields.BPF_B1_MSB == 0 && fields.BPF_B1_LSB == 0)
+            {
+                if (virtualRegs[0x41] != 0 || virtualRegs[0x42] != 0)
+                {
+                    fields.BPF_A2_MSB = virtualRegs[0x41];
+                    fields.BPF_A2_LSB = virtualRegs[0x42];
+                    fields.BPF_A3_MSB = virtualRegs[0x43];
+                    fields.BPF_A3_LSB = virtualRegs[0x44];
+                    fields.BPF_B1_MSB = virtualRegs[0x45];
+                    fields.BPF_B1_LSB = virtualRegs[0x46];
+                    fields.LPF_A2_MSB = (byte)(virtualRegs[0x47] & 0x7F);
+                    fields.LPF_A2_LSB = virtualRegs[0x48];
+                    fields.LPF_B1_MSB = (byte)(virtualRegs[0x49] & 0x7F);
+                    fields.LPF_B1_LSB = virtualRegs[0x4A];
+                }
+                else
+                {
+                    fields.BPF_A2_MSB = 0x84;
+                    fields.BPF_A2_LSB = 0x05;
+                    fields.BPF_A3_MSB = 0xF9;
+                    fields.BPF_A3_LSB = 0x5B;
+                    fields.BPF_B1_MSB = 0x03;
+                    fields.BPF_B1_LSB = 0x2D;
+                    fields.LPF_A2_MSB = 0x7E;
+                    fields.LPF_A2_LSB = 0x67;
+                    fields.LPF_B1_MSB = 0x00;
+                    fields.LPF_B1_LSB = 0xCD;
+                }
+            }
+
             WriteRegister(0x41, fields.BPF_A2_MSB);
             WriteRegister(0x42, fields.BPF_A2_LSB);
             WriteRegister(0x43, fields.BPF_A3_MSB);
@@ -510,29 +553,31 @@ namespace FormCollaudoPGA460
 
         private void EncodeP1Threshold()
         {
-            WriteRegister(0x5F, (byte)(((fields.TH_P1_T1 & 0x0F) << 4) | (fields.TH_P1_T2 & 0x0F)));
-            WriteRegister(0x60, (byte)(((fields.TH_P1_T3 & 0x0F) << 4) | (fields.TH_P1_T4 & 0x0F)));
-            WriteRegister(0x61, (byte)(((fields.TH_P1_T5 & 0x0F) << 4) | (fields.TH_P1_T6 & 0x0F)));
-            WriteRegister(0x62, (byte)(((fields.TH_P1_T7 & 0x0F) << 4) | (fields.TH_P1_T8 & 0x0F)));
-            WriteRegister(0x63, (byte)(((fields.TH_P1_T9 & 0x0F) << 4) | (fields.TH_P1_T10 & 0x0F)));
-            WriteRegister(0x64, (byte)(((fields.TH_P1_T11 & 0x0F) << 4) | (fields.TH_P1_T12 & 0x0F)));
+            virtualRegs[0x5F] = (byte)(((fields.TH_P1_T1 & 0x0F) << 4) | (fields.TH_P1_T2 & 0x0F));
+            virtualRegs[0x60] = (byte)(((fields.TH_P1_T3 & 0x0F) << 4) | (fields.TH_P1_T4 & 0x0F));
+            virtualRegs[0x61] = (byte)(((fields.TH_P1_T5 & 0x0F) << 4) | (fields.TH_P1_T6 & 0x0F));
+            virtualRegs[0x62] = (byte)(((fields.TH_P1_T7 & 0x0F) << 4) | (fields.TH_P1_T8 & 0x0F));
+            virtualRegs[0x63] = (byte)(((fields.TH_P1_T9 & 0x0F) << 4) | (fields.TH_P1_T10 & 0x0F));
+            virtualRegs[0x64] = (byte)(((fields.TH_P1_T11 & 0x0F) << 4) | (fields.TH_P1_T12 & 0x0F));
 
-            WriteRegister(0x65, (byte)(((fields.TH_P1_L1 & 0x1F) << 3) | ((fields.TH_P1_L2 >> 2) & 0x07)));
-            WriteRegister(0x66, (byte)(((fields.TH_P1_L2 & 0x03) << 6) | ((fields.TH_P1_L3 & 0x1F) << 1) | ((fields.TH_P1_L4 >> 4) & 0x01)));
-            WriteRegister(0x67, (byte)(((fields.TH_P1_L4 & 0x0F) << 4) | ((fields.TH_P1_L5 >> 1) & 0x0F)));
-            WriteRegister(0x68, (byte)(((fields.TH_P1_L5 & 0x01) << 7) | ((fields.TH_P1_L6 & 0x1F) << 2) | ((fields.TH_P1_L7 >> 3) & 0x03)));
-            WriteRegister(0x69, (byte)(((fields.TH_P1_L7 & 0x07) << 5) | (fields.TH_P1_L8 & 0x1F)));
+            virtualRegs[0x65] = (byte)(((fields.TH_P1_L1 & 0x1F) << 3) | ((fields.TH_P1_L2 >> 2) & 0x07));
+            virtualRegs[0x66] = (byte)(((fields.TH_P1_L2 & 0x03) << 6) | ((fields.TH_P1_L3 & 0x1F) << 1) | ((fields.TH_P1_L4 >> 4) & 0x01));
+            virtualRegs[0x67] = (byte)(((fields.TH_P1_L4 & 0x0F) << 4) | ((fields.TH_P1_L5 >> 1) & 0x0F));
+            virtualRegs[0x68] = (byte)(((fields.TH_P1_L5 & 0x01) << 7) | ((fields.TH_P1_L6 & 0x1F) << 2) | ((fields.TH_P1_L7 >> 3) & 0x03));
+            virtualRegs[0x69] = (byte)(((fields.TH_P1_L7 & 0x07) << 5) | (fields.TH_P1_L8 & 0x1F));
 
-            WriteRegister(0x6A, fields.TH_P1_L9);
-            WriteRegister(0x6B, fields.TH_P1_L10);
-            WriteRegister(0x6C, fields.TH_P1_L11);
-            WriteRegister(0x6D, fields.TH_P1_L12);
+            virtualRegs[0x6A] = fields.TH_P1_L9;
+            virtualRegs[0x6B] = fields.TH_P1_L10;
+            virtualRegs[0x6C] = fields.TH_P1_L11;
+            virtualRegs[0x6D] = fields.TH_P1_L12;
 
-            WriteRegister(0x6E, (byte)((virtualRegs[0x6E] & 0xF0) | (fields.TH_P1_OFF & 0x0F)));
+            virtualRegs[0x6E] = (byte)((virtualRegs[0x6E] & 0xF0) | (fields.TH_P1_OFF & 0x0F));
         }
 
         private byte[] BuildThresholdBlockBytes()
         {
+            EncodeP1Threshold();
+
             byte[] data = new byte[32];
 
             // --- P1 threshold: registri 0x5F-0x6E (16 byte) ---
@@ -635,6 +680,10 @@ namespace FormCollaudoPGA460
         {
             try
             {
+                ReadFieldsGrid();
+                EncodeP1Threshold();
+                VirtualRegistersToGrid();
+
                 ThresholdBulkWrite();
 
                 // Rilegge il registro diagnostico 0x4C per verificare che
@@ -643,6 +692,10 @@ namespace FormCollaudoPGA460
                 fields.THR_CRC_ERR = (byte)((reg4C >> 2) & 0x01);
 
                 UpdateFieldsGrid();
+
+                refreshGraph = true;
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
 
                 if (fields.THR_CRC_ERR == 0)
                     MessageBox.Show("Soglie scritte con CMD 16 (bulk write). THR_CRC_ERR = 0.");
@@ -737,6 +790,7 @@ namespace FormCollaudoPGA460
                 misura_to_result.Elapsed += misura_to_result_Elapsed;
 
                 dgvFields.CellEndEdit += dgvFields_CellEndEdit;
+                dgvRegisters.CellEndEdit += dgvRegisters_CellEndEdit;
 
                 txtIndirizzo.TextChanged += txtIndirizzo_TextChanged;
 
@@ -779,7 +833,8 @@ namespace FormCollaudoPGA460
 
             SendBurst();
 
-            burst_to_dump.Interval = 50;
+            int recordTimeMs = (int)(4.096f * (fields.P1_REC + 1));
+            burst_to_dump.Interval = Math.Max(50, recordTimeMs + 15);
             burst_to_dump.Start();
         }
 
@@ -796,7 +851,8 @@ namespace FormCollaudoPGA460
 
             SendBurst();
 
-            misura_to_result.Interval = 50;
+            int recordTimeMs = (int)(4.096f * (fields.P1_REC + 1));
+            misura_to_result.Interval = Math.Max(50, recordTimeMs + 15);
             misura_to_result.Start();
         }
 
@@ -898,7 +954,7 @@ namespace FormCollaudoPGA460
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.ToString());
+                Debug.WriteLine("[burst_to_dump_Elapsed] errore invio CMD7: " + ex.Message);
             }
 
             burst_decoding.Interval = 150;
@@ -908,7 +964,6 @@ namespace FormCollaudoPGA460
 
         private byte[] ReadEchoDump()
         {
-
             const int PACKET_SIZE = 130;
 
             byte[] rx = new byte[PACKET_SIZE];
@@ -965,7 +1020,6 @@ namespace FormCollaudoPGA460
             if (dump == null || dump.Length < 130)
             {
                 Debug.WriteLine("[burst_decoding] Dump non valido o incompleto");
-                MessageBox.Show("Dump non valido");
                 ResumeMisureLoopAfterGrafico();
                 return;
             }
@@ -1120,10 +1174,19 @@ namespace FormCollaudoPGA460
         {
             try
             {
-                if (offlineMode)
-                    GridToVirtualRegisters();
+                GridToVirtualRegisters();
 
-                DecodeRegisters14To6E();
+                bool prevOffline = offlineMode;
+                offlineMode = true;
+                try
+                {
+                    DecodeRegisters14To6E();
+                }
+                finally
+                {
+                    offlineMode = prevOffline;
+                }
+
                 UpdateFieldsGrid();
 
                 refreshGraph = true;
@@ -1131,7 +1194,7 @@ namespace FormCollaudoPGA460
                 if (lastEchoDump != null)
                     SafeDrawDump(lastEchoDump);
 
-                MessageBox.Show(offlineMode ? "Decode completato" : "Configurazione letta dal PGA460");
+                MessageBox.Show("Registri decodificati nei Campi.");
             }
             catch (Exception ex)
             {
@@ -1141,28 +1204,90 @@ namespace FormCollaudoPGA460
 
         private void WriteConfiguration()
         {
-            ReadFieldsGrid();
-
-            forceRegisterWrite = true;
-
             try
             {
-                EncodeRegisters14To6E();
-            }
-            finally
-            {
+                ReadFieldsGrid();
+
+                bool prevOfflineMode = offlineMode;
+                offlineMode = true;
                 forceRegisterWrite = false;
+
+                try
+                {
+                    EncodeRegisters14To6E();
+                }
+                finally
+                {
+                    offlineMode = prevOfflineMode;
+                }
+
+                VirtualRegistersToGrid();
+
+                refreshGraph = true;
+
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
             }
-
-            refreshGraph = true;
-
-            if (lastEchoDump != null)
-                DrawDump(lastEchoDump);
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[WriteConfiguration Error] {ex.Message}");
+            }
         }
 
         private void dgvFields_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             WriteConfiguration();
+        }
+
+        private void dgvRegisters_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != 2)
+                return;
+
+            try
+            {
+                var row = dgvRegisters.Rows[e.RowIndex];
+                string addrStr = row.Cells[0].Value?.ToString();
+                string valStr = row.Cells[2].Value?.ToString();
+
+                if (string.IsNullOrWhiteSpace(addrStr) || string.IsNullOrWhiteSpace(valStr))
+                    return;
+
+                byte addr = Convert.ToByte(addrStr, 16);
+                byte val = Convert.ToByte(valStr, 16);
+
+                row.Cells[2].Value = val.ToString("X2");
+                virtualRegs[addr] = val;
+
+                if (addr == 0x1F)
+                {
+                    currentUartAddress = (byte)((val >> 5) & 0x07);
+                    fields.UART_ADDR = currentUartAddress;
+                    if (txtIndirizzo != null && !txtIndirizzo.IsDisposed)
+                        txtIndirizzo.Text = currentUartAddress.ToString();
+                }
+
+                bool prevOffline = offlineMode;
+                offlineMode = true;
+                try
+                {
+                    DecodeRegisters14To6E();
+                }
+                finally
+                {
+                    offlineMode = prevOffline;
+                }
+
+                UpdateFieldsGrid();
+                refreshGraph = true;
+
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[dgvRegisters_CellEndEdit] error: " + ex.Message);
+            }
         }
 
         private void InitGrid()
@@ -1677,13 +1802,24 @@ namespace FormCollaudoPGA460
         {
             foreach (DataGridViewRow row in dgvFields.Rows)
             {
-                string name = row.Cells[0].Value.ToString();
-                string text = row.Cells[1].Value.ToString();
+                if (row.IsNewRow) continue;
+                string name = row.Cells[0].Value?.ToString();
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                string text = row.Cells[1].Value?.ToString()?.Trim();
+                if (string.IsNullOrWhiteSpace(text)) continue;
 
                 FieldInfo f = typeof(PGA460Fields).GetField(name);
 
                 if (f != null)
-                    f.SetValue(fields, Convert.ToByte(text));
+                {
+                    byte val;
+                    if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                        val = Convert.ToByte(text.Substring(2), 16);
+                    else
+                        val = Convert.ToByte(text);
+
+                    f.SetValue(fields, val);
+                }
             }
         }
 
@@ -1691,34 +1827,29 @@ namespace FormCollaudoPGA460
         {
             try
             {
-            bool connected = serial != null && serial.IsOpen;
-            bool prevOfflineModeRead = offlineMode;
-
-            if (connected)
-                offlineMode = false;
-                try
-                {
-                    foreach (
-                        DataGridViewRow row in dgvRegisters.Rows)
-                    {
-                        byte addr = Convert.ToByte(row.Cells[0].Value.ToString(), 16);
-
-                        byte value = ReadRegister(addr);
-
-                        row.Cells[2].Value = value.ToString("X2");
-                    }
-                }
-                finally
-                {
-                    offlineMode = prevOfflineModeRead;
-                }
+                ReadFieldsGrid();
 
                 bool prevOfflineMode = offlineMode;
                 offlineMode = true;
-                DecodeRegisters14To6E();
-                offlineMode = prevOfflineMode;
+                forceRegisterWrite = false;
 
-                UpdateFieldsGrid();
+                try
+                {
+                    EncodeRegisters14To6E();
+                }
+                finally
+                {
+                    offlineMode = prevOfflineMode;
+                }
+
+                VirtualRegistersToGrid();
+
+                refreshGraph = true;
+
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
+
+                MessageBox.Show("Campi convertiti e aggiornati nei Registri.");
             }
             catch (Exception ex)
             {
@@ -1758,11 +1889,23 @@ namespace FormCollaudoPGA460
                     byte addr = Convert.ToByte(row.Cells[0].Value.ToString(), 16);
                     byte value = virtualRegs[addr];
 
+                    // I registri di soglia (0x5F..0x7E) non devono essere scritti singolarmente
+                    // con CMD 10 per evitare di impostare THR_CRC_ERR = 1 sul PGA460.
+                    // Inoltre i registri 0x4C e 0x4D sono di sola lettura (DEV_STAT0/1).
+                    if ((addr >= 0x5F && addr <= 0x7E) || addr == 0x4C || addr == 0x4D)
+                        continue;
+
                     WriteRegister(addr, value, force: true);
 
                     if (addr == 0x1F)
                         currentUartAddress = (byte)((value >> 5) & 0x07);
                 }
+
+                // Scrittura bulk delle soglie con CMD 16
+                ThresholdBulkWrite();
+
+                byte reg4C = ReadRegister(0x4C);
+                fields.THR_CRC_ERR = (byte)((reg4C >> 2) & 0x01);
 
                 MessageBox.Show("Dati dell'area PC trasmessi al PGA460.");
             }
@@ -1777,6 +1920,10 @@ namespace FormCollaudoPGA460
                 fields.UART_ADDR = currentUartAddress;
                 txtIndirizzo.Text = currentUartAddress.ToString();
                 UpdateFieldsGrid();
+
+                refreshGraph = true;
+                if (lastEchoDump != null)
+                    SafeDrawDump(lastEchoDump);
             }
         }
 
@@ -1816,8 +1963,18 @@ namespace FormCollaudoPGA460
 
             try
             {
-                // Decodifica nei campi i registri appena caricati nell'area dati PC.
-                DecodeRegisters14To6E();
+                bool prevOffline = offlineMode;
+                offlineMode = true;
+                try
+                {
+                    // Decodifica nei campi i registri appena caricati nell'area dati PC.
+                    DecodeRegisters14To6E();
+                }
+                finally
+                {
+                    offlineMode = prevOffline;
+                }
+
                 UpdateFieldsGrid();
 
                 fields.UART_ADDR = currentUartAddress;
@@ -2253,18 +2410,66 @@ namespace FormCollaudoPGA460
 
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.ColumnIndex != 3)
+            if (e.RowIndex < 0 || e.ColumnIndex != 3)
                 return;
 
             try
             {
                 byte addr = Convert.ToByte(dgvRegisters.Rows[e.RowIndex].Cells[0].Value.ToString(), 16);
-
                 byte value = Convert.ToByte(dgvRegisters.Rows[e.RowIndex].Cells[2].Value.ToString(), 16);
 
-                WriteRegister(addr, value, force: true);
+                virtualRegs[addr] = value;
 
-                MessageBox.Show($"Registro {addr:X2} scritto con valore {value:X2}");
+                if (addr >= 0x5F && addr <= 0x7E)
+                {
+                    // I registri di soglia (0x5F..0x7E) devono essere scritti in blocco tramite CMD 16
+                    ThresholdBulkWrite();
+
+                    byte reg4C = ReadRegister(0x4C);
+                    fields.THR_CRC_ERR = (byte)((reg4C >> 2) & 0x01);
+
+                    DecodeP1Threshold();
+                    UpdateFieldsGrid();
+
+                    refreshGraph = true;
+                    if (lastEchoDump != null)
+                        SafeDrawDump(lastEchoDump);
+
+                    if (fields.THR_CRC_ERR == 0)
+                        MessageBox.Show($"Soglia registro {addr:X2} aggiornata e scritte tutte le soglie con CMD 16 (bulk write). THR_CRC_ERR = 0.");
+                    else
+                        MessageBox.Show($"Soglie scritte, ma THR_CRC_ERR = 1. Verificare che tutti i 32 byte trasmessi siano corretti.");
+                }
+                else
+                {
+                    WriteRegister(addr, value, force: true);
+
+                    if (addr == 0x1F)
+                    {
+                        currentUartAddress = (byte)((value >> 5) & 0x07);
+                        fields.UART_ADDR = currentUartAddress;
+                        if (txtIndirizzo != null && !txtIndirizzo.IsDisposed)
+                            txtIndirizzo.Text = currentUartAddress.ToString();
+                    }
+
+                    bool prevOffline = offlineMode;
+                    offlineMode = true;
+                    try
+                    {
+                        DecodeRegisters14To6E();
+                    }
+                    finally
+                    {
+                        offlineMode = prevOffline;
+                    }
+
+                    UpdateFieldsGrid();
+                    refreshGraph = true;
+                    if (lastEchoDump != null)
+                        SafeDrawDump(lastEchoDump);
+
+                    MessageBox.Show($"Registro {addr:X2} scritto con valore {value:X2}");
+                }
             }
             catch (Exception ex)
             {
@@ -2488,130 +2693,148 @@ namespace FormCollaudoPGA460
 
         private void DrawDump(byte[] samples)
         {
-
             Bitmap bmp = new Bitmap(pictureBoxDump.Width, pictureBoxDump.Height);
 
             using (Graphics g = Graphics.FromImage(bmp))
             {
                 g.Clear(Color.White);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
                 int w = bmp.Width;
                 int h = bmp.Height;
 
-                int left = 50;
+                int left = 90;
                 int right = 20;
-                int top = 50;
-                int bottom = 40;
+                int top = 30;
+                int bottom = 48;
 
                 Rectangle area = new Rectangle(left, top, w - left - right, h - top - bottom);
 
                 g.DrawRectangle(Pens.Black, area);
 
-                //
-                // asse tempo (0 ... 8.192 ms)
-                //
-
-                float recordTimeMs = 4.096f * (fields.P1_REC + 1);
-
-                for (int i = 0; i <= 8; i++)
+                using (Font fontScale = new Font(Font.FontFamily, 7.5f, FontStyle.Regular))
+                using (Font fontLabel = new Font(Font.FontFamily, 7.5f, FontStyle.Bold))
+                using (Font fontLegend = new Font(Font.FontFamily, 8f, FontStyle.Bold))
+                using (Font fontTitle = new Font(Font.FontFamily, 7.5f, FontStyle.Regular))
                 {
-                    float x = area.Left + i * area.Width / 8f;
+                    //
+                    // Etichette delle scale sull'asse X (in basso a sinistra)
+                    //
+                    g.DrawString("Tempo [ms]:", fontLabel, Brushes.Black, 4, area.Bottom + 5);
+                    g.DrawString("Distanza [cm]:", fontLabel, Brushes.DarkBlue, 4, area.Bottom + 22);
 
-                    g.DrawLine(Pens.LightGray, x, area.Top, x, area.Bottom);
+                    //
+                    // Asse X: griglia, tick e valori di Tempo (ms) e Distanza (cm)
+                    //
+                    float recordTimeMs = 4.096f * (fields.P1_REC + 1);
 
-                    double timeMs = i * (recordTimeMs / 8.0);
-
-                    g.DrawString(timeMs.ToString("0.###"), Font, Brushes.Black, x - 15, area.Bottom + 5);
-
-                    double distanceCm = timeMs * 1000.0 * 0.01715;
-
-                    g.DrawString(distanceCm.ToString("0"), Font, Brushes.DarkBlue, x - 12, area.Bottom + 22);
-                }
-
-                g.DrawString("Time (ms)", Font, Brushes.Black, area.Left + area.Width / 2 - 30, area.Bottom + 25);
-
-                //
-                // asse Y
-                //
-                for (int v = 0; v <= 240; v += 20)
-                {
-                    float y = area.Bottom - v * area.Height / 240f;
-
-                    g.DrawLine(Pens.Gainsboro, area.Left, y, area.Right, y);
-
-                    g.DrawString(v.ToString(), Font, Brushes.Black, 5, y - 8);
-                }
-
-                g.DrawString("Data Path Value", Font, Brushes.Black, 5, 14);
-
-                //
-                // dump ADC
-                //
-                using (Pen p = new Pen(Color.Blue, 1))
-                {
-                    for (int i = 1; i < samples.Length; i++)
+                    for (int i = 0; i <= 8; i++)
                     {
-                        float x1 = area.Left + (i - 1) * area.Width / (float)(samples.Length - 1);
+                        float x = area.Left + i * area.Width / 8f;
 
-                        float x2 = area.Left + i * area.Width / (float)(samples.Length - 1);
+                        // Linea di griglia verticale
+                        g.DrawLine(Pens.LightGray, x, area.Top, x, area.Bottom);
 
-                        float y1 = area.Bottom - samples[i - 1] * area.Height / 240f;
+                        // Tacchetta asse X
+                        g.DrawLine(Pens.Black, x, area.Bottom, x, area.Bottom + 3);
 
-                        float y2 = area.Bottom - samples[i] * area.Height / 240f;
+                        // Scala 1: Tempo in millisecondi
+                        double timeMs = i * (recordTimeMs / 8.0);
+                        string timeStr = timeMs.ToString("0.##");
+                        SizeF timeSize = g.MeasureString(timeStr, fontScale);
+                        g.DrawString(timeStr, fontScale, Brushes.Black, x - timeSize.Width / 2f, area.Bottom + 5);
 
-                        g.DrawLine(p, x1, y1, x2, y2);
-                    }
-                }
-
-                if (refreshGraph || cachedThresholdPts == null || cachedGainPts == null)
-                {
-                    cachedThresholdPts = BuildThresholdCurve(area);
-                    cachedGainPts = BuildTVGCurve(area);
-
-                    refreshGraph = false;
-                }
-
-                List<PointF> thrPts = cachedThresholdPts;
-
-                using (Pen p = new Pen(Color.Red, 2))
-                {
-                    for (int i = 1; i < thrPts.Count; i++)
-                    {
-                        g.DrawLine(p, thrPts[i - 1], thrPts[i]);
+                        // Scala 2: Distanza in centimetri (velocità del suono 343 m/s andata-ritorno = 17.15 cm/ms)
+                        double distanceCm = timeMs * 1000.0 * 0.01715;
+                        string distStr = distanceCm >= 100 ? distanceCm.ToString("0") : distanceCm.ToString("0.#");
+                        SizeF distSize = g.MeasureString(distStr, fontScale);
+                        g.DrawString(distStr, fontScale, Brushes.DarkBlue, x - distSize.Width / 2f, area.Bottom + 22);
                     }
 
-                    foreach (PointF pt in thrPts)
+                    //
+                    // Asse Y (0 ... 240)
+                    //
+                    for (int v = 0; v <= 240; v += 20)
                     {
-                        g.FillEllipse(Brushes.Red, pt.X - 3, pt.Y - 3, 6, 6);
+                        float y = area.Bottom - v * area.Height / 240f;
+
+                        // Linea di griglia orizzontale
+                        g.DrawLine(Pens.Gainsboro, area.Left, y, area.Right, y);
+
+                        // Tacchetta asse Y
+                        g.DrawLine(Pens.Black, area.Left - 3, y, area.Left, y);
+
+                        // Valore numerico Y allineato a destra
+                        string vStr = v.ToString();
+                        SizeF vSize = g.MeasureString(vStr, fontScale);
+                        g.DrawString(vStr, fontScale, Brushes.Black, area.Left - vSize.Width - 4, y - vSize.Height / 2f);
                     }
+
+                    g.DrawString("Valore ADC", fontTitle, Brushes.Black, 5, 10);
+
+                    //
+                    // Dump ADC (curva Echo Dump blu)
+                    //
+                    using (Pen p = new Pen(Color.Blue, 2))
+                    {
+                        for (int i = 1; i < samples.Length; i++)
+                        {
+                            float x1 = area.Left + (i - 1) * area.Width / (float)(samples.Length - 1);
+                            float x2 = area.Left + i * area.Width / (float)(samples.Length - 1);
+                            float y1 = area.Bottom - samples[i - 1] * area.Height / 240f;
+                            float y2 = area.Bottom - samples[i] * area.Height / 240f;
+
+                            g.DrawLine(p, x1, y1, x2, y2);
+                        }
+                    }
+
+                    if (refreshGraph || cachedThresholdPts == null || cachedGainPts == null)
+                    {
+                        cachedThresholdPts = BuildThresholdCurve(area);
+                        cachedGainPts = BuildTVGCurve(area);
+                        refreshGraph = false;
+                    }
+
+                    List<PointF> thrPts = cachedThresholdPts;
+
+                    using (Pen p = new Pen(Color.Red, 2))
+                    {
+                        for (int i = 1; i < thrPts.Count; i++)
+                        {
+                            g.DrawLine(p, thrPts[i - 1], thrPts[i]);
+                        }
+
+                        foreach (PointF pt in thrPts)
+                        {
+                            g.FillEllipse(Brushes.Red, pt.X - 3, pt.Y - 3, 6, 6);
+                        }
+                    }
+
+                    List<PointF> gainPts = cachedGainPts;
+
+                    using (Pen p = new Pen(Color.Green, 2))
+                    {
+                        for (int i = 1; i < gainPts.Count; i++)
+                        {
+                            g.DrawLine(p, gainPts[i - 1], gainPts[i]);
+                        }
+
+                        foreach (PointF pt in gainPts)
+                        {
+                            g.FillEllipse(Brushes.Green, pt.X - 3, pt.Y - 3, 6, 6);
+                        }
+                    }
+
+                    //
+                    // Legenda in alto
+                    //
+                    g.DrawString("Blu = Echo Dump", fontLegend, Brushes.Blue, area.Left + 20, 8);
+                    g.DrawString("Rosso = Trigger / Soglia", fontLegend, Brushes.Red, area.Left + 180, 8);
+                    g.DrawString("Verde = TVG Gain", fontLegend, Brushes.Green, area.Left + 390, 8);
                 }
-
-                List<PointF> gainPts = cachedGainPts;
-
-                using (Pen p = new Pen(Color.Green, 2))
-                {
-                    for (int i = 1; i < gainPts.Count; i++)
-                    {
-                        g.DrawLine(p, gainPts[i - 1], gainPts[i]);
-                    }
-
-                    foreach (PointF pt in gainPts)
-                    {
-                        g.FillEllipse(Brushes.Green, pt.X - 3, pt.Y - 3, 6, 6);
-                    }
-                }
-                //
-                // legenda
-                //
-                g.DrawString("Blu = Echo Dump", Font, Brushes.Blue, area.Left + 120, 2);
-
-                g.DrawString("Rosso = Trigger", Font, Brushes.Red, area.Left + 240, 2);
-
-                g.DrawString("Verde = TVG Gain", Font, Brushes.Green, area.Left + 360, 2);
             }
 
             pictureBoxDump.Image = bmp;
-
         }
 
 
